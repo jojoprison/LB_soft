@@ -1,0 +1,7 @@
+.idea/
+*.pyc
+
+/venv/
+**/__pycache__/
+*.iml
+/drivers/
