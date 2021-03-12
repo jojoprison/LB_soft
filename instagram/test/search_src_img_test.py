@@ -1,22 +1,30 @@
+import pathlib
+
 from bs4 import BeautifulSoup
 from selenium import webdriver
 
 from instagram.config import *
-
 from instagram.instagram_bot import InstagramBot
+from instagram.instagram_bot import get_project_root_path
 
-import requests
-from os import system
+from lxml import html
 
 
-def test(page_source):
+def find_a(page_source):
     soup = BeautifulSoup(page_source, "html.parser")
 
-    ass = soup.find_all('a')
-    print(ass)
-
+    # ass = soup.find_all('a')
+    # print(ass)
     # for a in ass:
-        # print(a)
+    #     print(a)
+
+    a_cl = soup.find("img", class_="FFVAD")
+    print(a_cl)
+
+    # tree = html.fromstring(page_source)
+    # acs = tree.xpath('/html/body/div[1]/section/main/div/div[1]/article/div[2]/'
+    #                  'div/div[1]/div[2]/div/div/div/ul/li[2]/div/a')
+    # print(acs)
 
     # gender_label = soup.find('label', {'for': 'pepGender'})
     # div_gender = gender_label.parent.parent
@@ -25,8 +33,6 @@ def test(page_source):
 
 
 if __name__ == '__main__':
-
-    # driver = webdriver.Chrome("../../drivers/chromedriver.exe")
 
     proxy = '188.168.81.158'
     port = '9050'
@@ -38,15 +44,16 @@ if __name__ == '__main__':
     profile.set_preference("network.proxy.ssl", proxy)
     profile.set_preference("network.proxy.ssl_port", port)
 
-    driver = webdriver.Firefox(firefox_profile=profile, executable_path='../../drivers/geckodriver.exe')
+    driver = webdriver.Firefox(firefox_profile=profile,
+                               executable_path=f'{get_project_root_path()}/drivers/geckodriver.exe')
 
-    bot = InstagramBot(driver=driver, username=USERNAME_2, password=PASSWORD_2)
+    bot = InstagramBot(username=USERNAME_2, password=PASSWORD_2, driver=driver)
 
     bot.login()
 
-    bot.driver.get('https://www.instagram.com/p/CHScg64ncRs/')
+    bot.driver.get('https://www.instagram.com/p/CKOetnuHmro/')
 
-    test(bot.driver.page_source)
+    find_a(bot.driver.page_source)
 
     # try:
     #     elem = bot.driver.find_element_by_class_name('savefrom-helper--btn')
@@ -54,5 +61,5 @@ if __name__ == '__main__':
     #     exist = True
     # except NoSuchElementException:
     #     exist = False
-
+    #
     # print(exist)

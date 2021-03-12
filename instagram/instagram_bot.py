@@ -1,5 +1,7 @@
 import json
 import os
+import pathlib
+import pickle
 import random
 import time
 
@@ -7,11 +9,45 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
-from instagram.config import *
 from instagram.config import users_settings_dict
+
+PROJECT_NAME = 'LB_soft'
+second_user_dict = list(users_settings_dict.values())[1]
+USERNAME = second_user_dict['login']
+PASSWORD = second_user_dict['password']
+
+
+# путь к проекту
+def get_project_root_path():
+    current_path = pathlib.Path().cwd()
+    project_path = ''
+
+    for parent_path in current_path.parents:
+        parent_path_parts = parent_path.parts
+        if parent_path_parts[len(parent_path_parts) - 1] == PROJECT_NAME:
+            project_path = parent_path
+            break
+
+    return project_path
+
+
+# путь к модулю проекта с определенным приложением (inst, db, vk)
+def get_module_path():
+    current_path = pathlib.Path().cwd()
+
+    while True:
+        current_path_parts = current_path.parts
+        if current_path_parts[len(current_path_parts) - 2] == PROJECT_NAME:
+            module_path = current_path
+            break
+        else:
+            current_path = current_path.parent
+
+    return module_path
 
 
 def get_user_page_url(username):
@@ -19,7 +55,7 @@ def get_user_page_url(username):
 
 
 def get_user_directory_path(username):
-    directory_path = f'users/{username}'
+    directory_path = f'{get_module_path()}/users/{username}'
 
     # создаём папку с именем пользователя для чистоты проекта
     if not os.path.exists(directory_path):
@@ -28,18 +64,38 @@ def get_user_directory_path(username):
     return directory_path
 
 
+def get_user_content_dir_path(username):
+    content_dir_path = f'{get_user_directory_path(username)}/content'
+
+    # создаём папку с именем пользователя для чистоты проекта
+    if not os.path.exists(content_dir_path):
+        os.mkdir(content_dir_path)
+
+    return content_dir_path
+
+
 def get_user_posts_file_path(username):
     return f'{get_user_directory_path(username)}/{username}_posts.txt'
 
 
 class InstagramBot:
-    def __init__(self, driver=None, username=None, password=None):
+    def __init__(self, username=None, password=None, driver=None, window_size=None):
         if not username:
             username = USERNAME
         if not password:
             password = PASSWORD
         if not driver:
-            driver = webdriver.Chrome("../drivers/chromedriver.exe")
+            if not window_size:
+                # options = Options()
+                # скрывает окно браузера
+                # options.add_argument(f'--headless')
+                driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe')
+            else:
+                options = Options()
+                options.add_argument(f'--window-size={window_size}')
+
+                driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe',
+                                          options=options)
 
         self.username = username
         self.password = password
@@ -55,32 +111,60 @@ class InstagramBot:
 
         driver = self.driver
         driver.get('https://www.instagram.com')
-        time.sleep(random.randrange(3, 5))
+        time.sleep(random.randrange(2, 4))
 
-        username_input = driver.find_element_by_name('username')
-        username_input.clear()
-        username_input.send_keys(self.username)
+        # путь к кукисам для юзера
+        cookies_file_path = f'{get_user_directory_path(self.username)}/{self.username}_cookies'
 
-        time.sleep(2)
+        # логинимся через кукисы, если есть
+        if os.path.exists(cookies_file_path):
+            for cookie in pickle.load(open(cookies_file_path, 'rb')):
+                driver.add_cookie(cookie)
 
-        password_input = driver.find_element_by_name('password')
-        password_input.clear()
-        password_input.send_keys(self.password)
+            time.sleep(2)
 
-        password_input.send_keys(Keys.ENTER)
-        time.sleep(7)
+            print('load cookies')
+            driver.refresh()
 
-        not_now_btn = driver.find_element_by_class_name('cmbtv')
-        not_now_btn.click()
+            time.sleep(3)
 
-        time.sleep(4)
+            # закрываем окно алертов
+            notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
+            off_notifications = notification_dialog.find_element_by_xpath(
+                './/div/div/div[3]/button[2]')
+            off_notifications.click()
 
-        notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
-        off_notifications = notification_dialog.find_element_by_xpath(
-            './/div/div/div[3]/button[2]')
-        off_notifications.click()
+            time.sleep(1)
+        # если нет - логинимся по стандарту
+        else:
+            username_input = driver.find_element_by_name('username')
+            username_input.clear()
+            username_input.send_keys(self.username)
 
-        time.sleep(1)
+            time.sleep(2)
+
+            password_input = driver.find_element_by_name('password')
+            password_input.clear()
+            password_input.send_keys(self.password)
+
+            password_input.send_keys(Keys.ENTER)
+            time.sleep(7)
+
+            # сразу запишем кукисы))
+            pickle.dump(driver.get_cookies(), open(cookies_file_path, 'wb'))
+
+            not_now_btn = driver.find_element_by_class_name('cmbtv')
+            not_now_btn.click()
+
+            time.sleep(4)
+
+            # закрываем окно алертов
+            notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
+            off_notifications = notification_dialog.find_element_by_xpath(
+                './/div/div/div[3]/button[2]')
+            off_notifications.click()
+
+            time.sleep(1)
 
     def get_account_info(self):
 
@@ -156,22 +240,37 @@ class InstagramBot:
                 self.close_driver()
 
     # метод проверяет по xpath существует ли элемент на странице
-    def exist_element(self, xpath=None):
+    def exist_element(self, search_pattern=None):
+        # TODO допилить проверку (я для картинок тут проверяю)
+
+        is_xpath = False
+        img_default = False
+
+        if search_pattern:
+            if search_pattern.startswith('/html') or  search_pattern.startswith('//'):
+                is_xpath = True
+            else:
+                img_default = True
+        else:
+            img_default = True
 
         driver = self.driver
 
         # ищем по xpath, если передается
-        if xpath:
+        if is_xpath:
             try:
-                driver.find_element_by_xpath(xpath)
+                driver.find_element_by_xpath(search_pattern)
                 exist = True
             except NoSuchElementException:
                 exist = False
-        # ищем тег <a> с указанным классом, там выдернем ссылку на контент
+            except Exception as ex:
+                print(ex)
+                exist = False
         else:
             try:
-                elem = driver.find_element_by_class_name('savefrom-helper--btn')
-                print(elem.text)
+                elem = bot.driver.find_element_by_class_name('FFVAD')
+                print(elem)
+                print('elem text:', elem.text)
                 exist = True
             except NoSuchElementException:
                 exist = False
@@ -275,6 +374,7 @@ class InstagramBot:
         with open(get_user_posts_file_path(username)) as file:
             url_list = file.readlines()
 
+            # TODO ставит лайки только на первые 6 ссылок на посты из файла
             for post_url in url_list[0:6]:
                 try:
                     driver.get(post_url)
@@ -310,25 +410,28 @@ class InstagramBot:
             for post_url in url_list:
                 try:
                     driver.get(post_url)
-                    time.sleep(4)
+                    time.sleep(3)
 
+                    # TODO поиск по xpath, убрать лишнее, допилить скачку для видосов
                     img_src = "/html/body/div[1]/section/main/div/div[1]/article/" \
                               "div[2]/div/div/div[1]/img"
                     video_src = "/html/body/div[1]/section/main/div/div[1]/article/" \
                                 "div[2]/div/div/div[1]/div/div/video"
+                    # '/html/body/div[1]/section/main/div/div[1]/article/div[2]/div/div[1]/div[2]/div/div/div/ul/li[2]/div/div/div/div[1]/img'
 
                     post_id = post_url.split('/')[-2]
 
-                    if self.exist_element(img_src):
-                        img_src_url = driver.find_element_by_xpath(img_src).get_attribute("src")
+                    if self.exist_element():
+                        img_src_url = bot.driver.find_element_by_class_name('FFVAD').get_attribute("src")
+                        # img_src_url = driver.find_element_by_xpath(img_src).get_attribute("src")
 
                         img_and_video_src_urls.append(img_src_url)
 
                         # сохраняем изображение
                         get_img = requests.get(img_src_url)
 
-                        with open(f'{get_user_directory_path(username)}/'
-                                  f'{username}_{post_id}_img.jpg', 'wb') as img_file:
+                        with open(f'{get_user_content_dir_path(username)}/'
+                                  f'{post_id}_img.jpg', 'wb') as img_file:
                             img_file.write(get_img.content)
 
                     elif self.exist_element(video_src):
@@ -338,8 +441,8 @@ class InstagramBot:
                         # сохраняем видео
                         get_video = requests.get(video_src_url, stream=True)
 
-                        with open(f"{get_user_directory_path(username)}/"
-                                  f"{username}_{post_id}_video.mp4", "wb") as video_file:
+                        with open(f"{get_user_content_dir_path(username)}/"
+                                  f"{post_id}_video.mp4", "wb") as video_file:
 
                             for chunk in get_video.iter_content(chunk_size=1280 * 1024):
                                 if chunk:
@@ -353,14 +456,18 @@ class InstagramBot:
                     print(ex)
                     self.close_driver()
 
+            print('контент успешно скачан')
             self.close_driver()
 
-        with open(f'{get_user_directory_path(username)}/'
-                  f'{username}_img_and_video_src_urls.txt', 'a') as file:
+        with open(f'{get_user_content_dir_path(username)}/'
+                  f'!_img_and_video_src_urls.txt', 'a') as file:
             for i in img_and_video_src_urls:
                 file.write(i + "\n")
 
+        print('записана инфа о скачанном контенте')
+
     # метод подписки на всех подписчиков переданного аккаунта
+    # TODO перелопатить все xpath
     def get_all_followers(self, username):
 
         user_page = get_user_page_url(username)
@@ -392,23 +499,20 @@ class InstagramBot:
                 followers_count = int(followers_count)
 
             print(f"Количество подписчиков: {followers_count}")
-            time.sleep(2)
 
             loops_count = int(followers_count / 12)
 
             print(f"Число итераций: {loops_count}")
-            time.sleep(4)
 
             followers_button.click()
-            time.sleep(4)
-
-            followers_ul = driver.find_element_by_xpath("/html/body/div[5]/div/div/div[2]/ul")
+            time.sleep(2)
 
             try:
+                followers_ul = driver.find_element_by_xpath('/html/body/div[5]/div/div/div[2]')
                 followers_urls = []
 
                 for i in range(1, loops_count + 1):
-                    driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", followers_ul)
+                    driver.execute_script(f"arguments[0].scrollTop = arguments[0].scrollHeight", followers_ul)
                     time.sleep(random.randrange(2, 4))
                     print(f"Итерация #{i}")
 
@@ -423,78 +527,102 @@ class InstagramBot:
                     for link in followers_urls:
                         text_file.write(link + "\n")
 
-                with open(f'{get_user_directory_path(username)}/{username}_subs.txt') as text_file:
-                    users_urls = text_file.readlines()
-
-                    for user in users_urls[0:10]:
-                        try:
-                            try:
-                                with open(f'{get_user_directory_path(username)}/'
-                                          f'{username}_subscribe_list.txt',
-                                          'r') as subscribe_list_file:
-
-                                    lines = subscribe_list_file.readlines()
-
-                                    if user in lines:
-                                        print(f'Мы уже подписаны на {user}, переходим к следующему пользователю!')
-                                        continue
-
-                            except Exception as ex:
-                                print('Файл со ссылками ещё не создан!')
-                                # print(ex)
-
-                            driver = self.driver
-                            driver.get(user)
-                            page_owner = user.split("/")[-2]
-
-                            if self.exist_element("/html/body/div[1]/section/main/div/header/section/div[1]/div/a"):
-
-                                print("Это наш профиль, уже подписан, пропускаем итерацию!")
-                            elif self.exist_element(
-                                    "/html/body/div[1]/section/main/div/header/section/div[1]/div[2]/div/span/span[1]/button/div/span"):
-                                print(f"Уже подписаны, на {page_owner} пропускаем итерацию!")
-                            else:
-                                time.sleep(random.randrange(4, 8))
-
-                                if self.exist_element(
-                                        "/html/body/div[1]/section/main/div/div/article/div[1]/div/h2"):
-                                    try:
-                                        follow_button = driver.find_element_by_xpath(
-                                            "/html/body/div[1]/section/main/div/header/section/div[1]/div[1]/button").click()
-                                        print(f'Запросили подписку на пользователя {page_owner}. Закрытый аккаунт!')
-                                    except Exception as ex:
-                                        print(ex)
-                                else:
-                                    try:
-                                        if self.exist_element(
-                                                "/html/body/div[1]/section/main/div/header/section/div[1]/div[1]/button"):
-                                            follow_button = driver.find_element_by_xpath(
-                                                "/html/body/div[1]/section/main/div/header/section/div[1]/div[1]/button").click()
-                                            print(f'Подписались на пользователя {page_owner}. Открытый аккаунт!')
-                                        else:
-                                            follow_button = driver.find_element_by_xpath(
-                                                "/html/body/div[1]/section/main/div/header/section/div[1]/div[1]/div/span/span[1]/button").click()
-                                            print(f'Подписались на пользователя {page_owner}. Открытый аккаунт!')
-                                    except Exception as ex:
-                                        print(ex)
-
-                                # записываем данные в файл для ссылок всех подписок, если файла нет, создаём, если есть - дополняем
-                                with open(f'{get_user_directory_path(username)}/'
-                                          f'{username}_subscribe_list.txt',
-                                          'a') as subscribe_list_file:
-                                    subscribe_list_file.write(user)
-
-                                time.sleep(random.randrange(7, 15))
-
-                        except Exception as ex:
-                            print(ex)
-                            self.close_driver()
-
             except Exception as ex:
                 print(ex)
                 self.close_driver()
 
         self.close_driver()
+
+    def follow_to_list_of_user_follows(self, username):
+
+        with open(f'{get_user_directory_path(username)}/{username}_subs.txt') as text_file:
+            users_urls = text_file.readlines()
+
+            # TODO поменять число чтоб вывело больше
+            for user in users_urls[0:3]:
+                try:
+                    try:
+                        with open(f'{get_user_directory_path(username)}/'
+                                  f'{username}_subscribe_list.txt',
+                                  'r') as subscribe_list_file:
+
+                            lines = subscribe_list_file.readlines()
+
+                            if user in lines:
+                                print(f'Мы уже подписаны на {user}, переходим к следующему пользователю!')
+                                continue
+
+                    except Exception as ex:
+                        print('Файл со ссылками ещё не создан!')
+                        # print(ex)
+
+                    driver = self.driver
+                    driver.get(user)
+                    page_owner = user.split("/")[-2]
+
+                    # конпка редактировать профиль
+                    edit_profile_btn = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/a'
+                    # копнка с галкой о подписке
+                    subscribed_right_now_first = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div[2]/div/span/span[1]/button/div/span'
+                    subscribed_right_now_second = '/html/body/div[1]/section/main/div/header/section/div[1]/div[1]/div/div[2]/button/div/span'
+                    subscribed_right_now_third = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div[1]/div/button'
+                    # надпись закрытый акк
+                    private_acc_info = '//*[@id="react-root"]/section/main/div/div[2]/article/div[1]/div/h2'
+                    # конпка подписки на закрытый акк
+                    follow_private_acc_btn = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div/button'
+                    # первый варик подписки на открытый акк
+                    follow_btn_first = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div/div/span/span[1]/button'
+                    # второй варик подписки на открытый акк
+                    follow_btn_second = '/html/body/div[1]/section/main/div/header/section' \
+                                        '/div[1]/div[1]/div/div/div/span/span[1]/button'
+
+                    time.sleep(1)
+
+                    # TODO доделать проверки, придумать проверки через парентов и рядом находящиеся блоки
+                    if self.exist_element(edit_profile_btn):
+                        print("Это наш профиль, уже подписан, пропускаем итерацию!")
+                    elif self.exist_element(subscribed_right_now_first):
+                        print(f"Уже подписаны, на {page_owner} пропускаем итерацию!")
+                    elif self.exist_element(subscribed_right_now_second):
+                        print(f"Уже подписаны, на {page_owner} пропускаем итерацию!")
+                    elif self.exist_element(subscribed_right_now_third):
+                        print(f"Уже подписаны, на {page_owner} пропускаем итерацию!")
+                    else:
+                        time.sleep(random.randrange(4, 8))
+
+                        # акк закрыт
+                        if self.exist_element(private_acc_info):
+                            try:
+                                # подписка на закрытый акк
+                                driver.find_element_by_xpath(follow_private_acc_btn).click()
+                                print(f'Запросили подписку на пользователя {page_owner}. Закрытый аккаунт!')
+                            except Exception as ex:
+                                print(ex)
+                        else:
+                            try:
+                                # подписка открытый акк
+                                if self.exist_element(follow_btn_first):
+                                    driver.find_element_by_xpath(follow_btn_first).click()
+                                    print(f'Подписались на пользователя {page_owner}. Открытый аккаунт!')
+                                else:
+                                    driver.find_element_by_xpath(follow_btn_second).click()
+                                    print(f'Подписались на пользователя {page_owner}. Открытый аккаунт!')
+                            except Exception as ex:
+                                print(ex)
+
+                        # записываем данные в файл для ссылок всех подписок,
+                        # если файла нет, создаём, если есть - дополняем
+                        with open(f'{get_user_directory_path(username)}/'
+                                  f'{username}_subscribe_list.txt',
+                                  'a') as subscribe_list_file:
+                            subscribe_list_file.write(user)
+
+                        # TODO увеличить паузу чтобы избежать палева
+                        time.sleep(random.randrange(7, 15))
+
+                except Exception as ex:
+                    print(ex)
+                    self.close_driver()
 
     # метод для отправки сообщений в директ
     def send_direct_message(self, usernames="", message="", img_path=''):
@@ -518,23 +646,23 @@ class InstagramBot:
         time.sleep(random.randrange(2, 4))
 
         send_message_button = driver.find_element_by_xpath(
-            "/html/body/div[1]/section/div/div[2]/div/div/div[2]/div/button").click()
+            "/html/body/div[1]/section/div/div[2]/div/div/div[2]/div/div[3]/div/button").click()
         time.sleep(random.randrange(2, 4))
 
         # отправка сообщения нескольким пользователям
         for user in usernames:
             # вводим получателя
-            to_input = driver.find_element_by_xpath("/html/body/div[4]/div/div/div[2]/div[1]/div/div[2]/input")
+            to_input = driver.find_element_by_xpath("/html/body/div[5]/div/div/div[2]/div[1]/div/div[2]/input")
             to_input.send_keys(user)
             time.sleep(random.randrange(2, 4))
 
             # выбираем получателя из списка
             users_list = driver.find_element_by_xpath(
-                "/html/body/div[4]/div/div/div[2]/div[2]").find_element_by_tag_name("button").click()
+                "/html/body/div[5]/div/div/div[2]/div[2]/div/div").find_element_by_tag_name("button").click()
             time.sleep(random.randrange(2, 4))
 
         next_button = driver.find_element_by_xpath(
-            "/html/body/div[4]/div/div/div[1]/div/div[2]/div/button").click()
+            "/html/body/div[5]/div/div/div[1]/div/div[2]/div/button").click()
         time.sleep(random.randrange(2, 4))
 
         # отправка текстового сообщения
@@ -553,17 +681,19 @@ class InstagramBot:
             send_img_input = driver.find_element_by_xpath(
                 "/html/body/div[1]/section/div/div[2]/div/div/div[2]/div[2]/div/div[2]/div/div/form/input")
             send_img_input.send_keys(img_path)
+
             print(f"Изображение для {usernames} успешно отправлено!")
             time.sleep(random.randrange(2, 4))
 
         self.close_driver()
 
     # метод отписки от всех пользователей
-    def unsubscribe_for_all_users(self, userpage):
+    def unsubscribe_for_all_users(self):
 
         driver = self.driver
-        driver.get(f"https://www.instagram.com/{USERNAME}/")
-        time.sleep(random.randrange(3, 6))
+        user_page = get_user_page_url(self.username)
+        driver.get(user_page)
+        time.sleep(random.randrange(2, 4))
 
         following_button = driver.find_element_by_xpath(
             "/html/body/div[1]/section/main/div/header/section/ul/li[3]/a")
@@ -598,7 +728,7 @@ class InstagramBot:
             time.sleep(random.randrange(3, 6))
 
             # забираем все li из ul, в них хранится кнопка отписки и ссылки на подписки
-            following_div_block = driver.find_element_by_xpath("/html/body/div[4]/div/div/div[2]/ul/div")
+            following_div_block = driver.find_element_by_xpath("/html/body/div[5]/div/div/div[2]/ul/div")
             following_users = following_div_block.find_elements_by_tag_name("li")
             time.sleep(random.randrange(3, 6))
 
@@ -610,13 +740,14 @@ class InstagramBot:
                 user_url = user.find_element_by_tag_name("a").get_attribute("href")
                 user_name = user_url.split("/")[-2]
 
-                # добавляем в словарь пару имя_пользователя: ссылка на аккаунт, на всякий, просто полезно сохранять информацию
+                # добавляем в словарь пару имя_пользователя: ссылка на аккаунт,
+                # на всякий, просто полезно сохранять информацию
                 following_users_dict[user_name] = user_url
 
                 following_button = user.find_element_by_tag_name("button").click()
                 time.sleep(random.randrange(3, 6))
                 unfollow_button = driver.find_element_by_xpath(
-                    "/html/body/div[5]/div/div/div/div[3]/button[1]").click()
+                    "/html/body/div[6]/div/div/div/div[3]/button[1]").click()
 
                 print(f"Итерация #{count} >>> Отписался от пользователя {user_name}")
                 count -= 1
@@ -633,13 +764,16 @@ class InstagramBot:
     def smart_unsubscribe(self, username):
 
         driver = self.driver
-        driver.get(f"https://www.instagram.com/{username}/")
+        user_page = get_user_page_url(self.username)
+        driver.get(user_page)
         time.sleep(random.randrange(3, 6))
 
+        # кнопка подписчиков
         followers_button = driver.find_element_by_xpath(
             "/html/body/div[1]/section/main/div/header/section/ul/li[2]/a/span")
         followers_count = followers_button.get_attribute("title")
 
+        # кнопка подписок
         following_button = driver.find_element_by_xpath(
             "/html/body/div[1]/section/main/div/header/section/ul/li[3]/a")
         following_count = following_button.find_element_by_tag_name("span").text
@@ -665,31 +799,36 @@ class InstagramBot:
         followers_button.click()
         time.sleep(4)
 
-        followers_ul = driver.find_element_by_xpath("/html/body/div[4]/div/div/div[2]")
+        # список подписчиков
+        follower_list_xpath = '/html/body/div[4]/div/div/div[2]'
+        followers_urls = []
 
-        try:
-            followers_urls = []
-            print("Запускаем сбор подписчиков...")
-            for i in range(1, followers_loops_count + 1):
-                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", followers_ul)
-                time.sleep(random.randrange(2, 4))
-                print(f"Итерация #{i}")
+        if self.exist_element(follower_list_xpath):
+            followers_ul = driver.find_element_by_xpath(follower_list_xpath)
 
-            all_urls_div = followers_ul.find_elements_by_tag_name("li")
+            try:
+                print("Запускаем сбор подписчиков...")
+                for i in range(1, followers_loops_count + 1):
+                    driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", followers_ul)
+                    time.sleep(random.randrange(2, 4))
+                    print(f"Итерация #{i}")
 
-            for url in all_urls_div:
-                url = url.find_element_by_tag_name("a").get_attribute("href")
-                followers_urls.append(url)
+                all_urls_div = followers_ul.find_elements_by_tag_name("li")
 
-            # сохраняем всех подписчиков пользователя в файл
-            with open(f"{username}_followers_list.txt", "a") as followers_file:
-                for link in followers_urls:
-                    followers_file.write(link + "\n")
-        except Exception as ex:
-            print(ex)
-            self.close_driver()
+                for url in all_urls_div:
+                    url = url.find_element_by_tag_name("a").get_attribute("href")
+                    followers_urls.append(url)
 
-        time.sleep(random.randrange(4, 6))
+                # сохраняем всех подписчиков пользователя в файл
+                with open(f"{username}_followers_list.txt", "a") as followers_file:
+                    for link in followers_urls:
+                        followers_file.write(link + "\n")
+
+                time.sleep(random.randrange(4, 6))
+            except Exception as ex:
+                print(ex)
+                self.close_driver()
+
         driver.get(f"https://www.instagram.com/{username}/")
         time.sleep(random.randrange(3, 6))
 
@@ -699,7 +838,8 @@ class InstagramBot:
         following_button.click()
         time.sleep(random.randrange(3, 5))
 
-        following_ul = driver.find_element_by_xpath("/html/body/div[4]/div/div/div[2]")
+        # TODO тут тоже не работает
+        following_ul = driver.find_element_by_xpath("/html/body/div[5]/div/div/div[2]")
 
         try:
             following_urls = []
@@ -726,11 +866,12 @@ class InstagramBot:
 
             count = 0
             unfollow_list = []
-            for user in following_urls:
-                if user not in followers_urls:
-                    count += 1
-                    unfollow_list.append(user)
-            print(f"Нужно отписаться от {count} пользователей")
+            if followers_urls:
+                for user in following_urls:
+                    if user not in followers_urls:
+                        count += 1
+                        unfollow_list.append(user)
+                print(f"Нужно отписаться от {count} пользователей")
 
             # сохраняем всех от кого нужно отписаться в файл
             with open(f"{username}_unfollow_list.txt", "a") as unfollow_file:
@@ -813,7 +954,14 @@ if __name__ == '__main__':
     # bot.get_all_posts_url('https://www.instagram.com/squalordf/')
     # bot.put_many_likes('squalordf')
 
-    bot.download_user_content('squalordf')
-    # bot.put_many_likes("https://www.instagram.com/squalordf/")
+    # bot.download_user_content('squalordf')
+    # bot.get_all_followers('squalordf')
+    # не сработает без предыдущего
+    # bot.follow_to_list_of_user_follows('squalordf')
+
+    # bot.send_direct_message(direct_users_list, 'hi there', 'D:\PyCharm_projects\LB_soft\instagram//violet_sea.jpg')
+
+    # bot.unsubscribe_for_all_users()
+    bot.smart_unsubscribe(USERNAME)
 
     # test_massive()
