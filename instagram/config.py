@@ -9,6 +9,6 @@ users_settings_dict = {
     'user_2': {
         'login': 'Michellemobetua48',
         'password': 'Wsxzaq123',
-        'window_size': '1600, 900'
+        'window_size': '800,600'
     }
 }

@@ -1,3 +1,8 @@
 requests~=2.25.1
 selenium~=3.141.0
 beautifulsoup4~=4.9.3
+user_agent~=0.1.9
+user_agents~=2.2.0
+fake_useragent~=0.1.11
+pafy=0.5.5
+smsactivateru~=1.2.6

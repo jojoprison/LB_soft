@@ -9,16 +9,25 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.proxy import Proxy, ProxyType
+from selenium.webdriver.support.select import Select
 
 from instagram.config import users_settings_dict
+
+from fake_useragent import UserAgent
+from fp.fp import FreeProxy
+
+from smsactivateru import Sms, SmsTypes, SmsService, GetBalance, GetFreeSlots, GetNumber
 
 PROJECT_NAME = 'LB_soft'
 second_user_dict = list(users_settings_dict.values())[1]
 USERNAME = second_user_dict['login']
 PASSWORD = second_user_dict['password']
+WINDOW_SIZE = second_user_dict['window_size']
 
 
 # путь к проекту
@@ -79,23 +88,117 @@ def get_user_posts_file_path(username):
 
 
 class InstagramBot:
-    def __init__(self, username=None, password=None, driver=None, window_size=None):
+    def __init__(self, username=None, password=None, window_size=None, driver=None):
         if not username:
             username = USERNAME
         if not password:
             password = PASSWORD
+
+        if not window_size:
+            window_size = WINDOW_SIZE
+
         if not driver:
-            if not window_size:
-                # options = Options()
+
+            driver_name_list = ['chrome', 'firefox']
+            # выбираем браузер из списка
+            driver_name = random.choice(driver_name_list)
+
+            # print('get user-agent')
+            # user_agent = UserAgent(cache=False, use_cache_server=False).random
+            # print(user_agent)
+
+            # proxy = FreeProxy(rand=True).get()
+            # if proxy:
+            #     print(proxy)
+            #     proxy_str = proxy.split('//')[1]
+            # else:
+            #     proxy_str = None
+
+            # proxy_str = '217.28.221.7:30005'
+            proxy_str = None
+
+            driver_name = 'chrome'
+
+            if driver_name == 'chrome':
+                options = ChromeOptions()
                 # скрывает окно браузера
                 # options.add_argument(f'--headless')
-                driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe')
-            else:
-                options = Options()
+                # изменяет размер окна браузера
                 options.add_argument(f'--window-size={window_size}')
+                # options.add_argument(f'window-size={window_size}')
 
-                driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe',
-                                          options=options)
+                # options.add_argument(f'user-agent={user_agent}')
+
+                if proxy_str:
+                    proxy = Proxy()
+                    proxy.proxy_type = ProxyType.MANUAL
+                    proxy.http_proxy = proxy_str
+                    proxy.socks_proxy = proxy_str
+                    proxy.ssl_proxy = proxy_str
+
+                    chrome_capabilities = webdriver.DesiredCapabilities.CHROME
+                    proxy.add_to_capabilities(chrome_capabilities)
+
+                    driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
+                                              options=options, desired_capabilities=chrome_capabilities)
+                else:
+                    driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
+                                              options=options)
+            else:
+                firefox_profile = webdriver.FirefoxProfile()
+                # firefox_profile.set_preference('general.useragent.override', user_agent)
+                firefox_profile.set_preference('dom.file.createInChild', True)
+                firefox_profile.set_preference('font.size.variable.x-western', 14)
+                # firefox_profile.set_preference("permissions.default.desktop-notification", 1)
+                # firefox_profile.set_preference("dom.webnotifications.enabled", 1)
+                # firefox_profile.set_preference("dom.push.enabled", 1)
+                # firefox_profile.set_preference('browser.download.manager.showWhenStarting', False)
+                # firefox_profile.set_preference('browser.helperApps.neverAsk.saveToDisk', 'text/csv')
+                # firefox_profile.set_preference("browser.link.open_newwindow", 3)
+                # firefox_profile.set_preference("browser.link.open_newwindow.restriction", 2)
+
+                # proxy
+                # firefox_profile.set_preference("network.proxy.type", 1)
+
+                # firefox_profile.set_preference("network.proxy.socks", "127.0.0.1")
+                # firefox_profile.set_preference("network.proxy.socks_port", 9150)
+                # firefox_profile.set_preference("network.proxy.socks_remote_dns", True)
+
+                firefox_profile.set_preference("places.history.enabled", False)
+                firefox_profile.set_preference("privacy.clearOnShutdown.offlineApps", True)
+                firefox_profile.set_preference("privacy.clearOnShutdown.passwords", True)
+                firefox_profile.set_preference("privacy.clearOnShutdown.siteSettings", True)
+                firefox_profile.set_preference("privacy.sanitize.sanitizeOnShutdown", True)
+                # firefox_profile.set_preference("signon.rememberSignons", False)
+                firefox_profile.set_preference("network.cookie.lifetimePolicy", 2)
+                firefox_profile.set_preference("network.dns.disablePrefetch", True)
+                firefox_profile.set_preference("network.http.sendRefererHeader", 0)
+                firefox_profile.set_preference("javascript.enabled", False)
+                firefox_profile.set_preference("permissions.default.image", 2)
+
+                firefox_profile.update_preferences()
+
+                if proxy_str:
+                    firefox_capabilities = webdriver.DesiredCapabilities.FIREFOX
+                    firefox_capabilities['marionette'] = True
+
+                    firefox_capabilities['proxy'] = {
+                        'proxyType': 'MANUAL',
+                        'httpProxy': proxy_str,
+                        'ftpProxy': proxy_str,
+                        'sslProxy': proxy_str
+                    }
+                else:
+                    firefox_capabilities = None
+
+                options = FirefoxOptions()
+                options.add_argument(f'--width={window_size.split(",")[0]}')
+                options.add_argument(f'--height={window_size.split(",")[1]}')
+
+                driver = webdriver.Firefox(firefox_profile=firefox_profile,
+                                           capabilities=firefox_capabilities,
+                                           executable_path=f'{get_project_root_path()}\\drivers\\geckodriver.exe',
+                                           options=options)
 
         self.username = username
         self.password = password
@@ -118,6 +221,9 @@ class InstagramBot:
 
         # логинимся через кукисы, если есть
         if os.path.exists(cookies_file_path):
+            driver.delete_all_cookies()
+            driver.execute_script("window.localStorage.clear()")
+
             for cookie in pickle.load(open(cookies_file_path, 'rb')):
                 driver.add_cookie(cookie)
 
@@ -127,14 +233,6 @@ class InstagramBot:
             driver.refresh()
 
             time.sleep(3)
-
-            # закрываем окно алертов
-            notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
-            off_notifications = notification_dialog.find_element_by_xpath(
-                './/div/div/div[3]/button[2]')
-            off_notifications.click()
-
-            time.sleep(1)
         # если нет - логинимся по стандарту
         else:
             username_input = driver.find_element_by_name('username')
@@ -158,13 +256,13 @@ class InstagramBot:
 
             time.sleep(4)
 
-            # закрываем окно алертов
-            notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
-            off_notifications = notification_dialog.find_element_by_xpath(
-                './/div/div/div[3]/button[2]')
-            off_notifications.click()
+        # закрываем окно алертов
+        notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
+        off_notifications = notification_dialog.find_element_by_xpath(
+            './/div/div/div[3]/button[2]')
+        off_notifications.click()
 
-            time.sleep(1)
+        time.sleep(1)
 
     def get_account_info(self):
 
@@ -210,6 +308,124 @@ class InstagramBot:
         driver.back()
         time.sleep(10)
 
+    def reg_account(self, phone, username, password, email=None, name=None):
+        driver = self.driver
+        driver.get('https://www.instagram.com')
+        time.sleep(random.randrange(2, 4))
+
+        reg_btn = driver.find_element_by_xpath('/html/body/div[1]/section/main/article/div[2]/div[2]/div/p/a/span')
+        reg_btn.click()
+        time.sleep(random.randrange(2, 4))
+
+        name_or_phone_textbox = driver.find_element_by_name('emailOrPhone')
+        name_or_phone_textbox.clear()
+        name_or_phone_textbox.send_keys(phone)
+
+        time.sleep(2)
+
+        if name:
+            fullname_textbox = driver.find_element_by_name('fullName')
+            fullname_textbox.clear()
+            fullname_textbox.send_keys(name)
+
+            time.sleep(2)
+
+        username_textbox = driver.find_element_by_name('username')
+        username_textbox.clear()
+        username_textbox.send_keys(username)
+
+        time.sleep(2)
+
+        password_textbox = driver.find_element_by_name('password')
+        password_textbox.clear()
+        password_textbox.send_keys(password)
+
+        time.sleep(2)
+
+        error_phone = 'Похоже, вы неверно указали номер телефона. Введите полный номер с кодом страны.'
+        error_username = 'Это имя пользователя уже занято. Попробуйте другое.'
+
+        # TODO в случае если
+        while True:
+            password_textbox.send_keys(Keys.ENTER)
+
+            time.sleep(3)
+
+            try:
+                error_alert = driver.find_element_by_id('ssfErrorAlert')
+                error_alert_value = error_alert.text
+
+                if error_alert_value == error_username:
+                    print('что то сделать если неправильно введен юзернейм')
+                elif error_alert_value == error_phone:
+                    print('что то сделать если неправильно введен номер телефона')
+
+            except Exception as e:
+                print(e)
+
+            break
+
+        time.sleep(2)
+
+        birth_month_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
+                                      'div[1]/div/div[4]/div/div/span/span[1]/select'
+        birth_month_selection = Select(driver.find_element_by_xpath(birth_month_selection_xpath))
+
+        random_month = random.randrange(11)
+        birth_month_selection.select_by_index(random_month)
+
+        time.sleep(2)
+
+        birth_day_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
+                                    'div[1]/div/div[4]/div/div/span/span[2]/select'
+        birth_day_selection = Select(driver.find_element_by_xpath(birth_day_selection_xpath))
+
+        random_day = random.randrange(29)
+        birth_day_selection.select_by_index(random_day)
+
+        time.sleep(2)
+
+        birth_year_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
+                                     'div[1]/div/div[4]/div/div/span/span[3]/select'
+        birth_year_selection = Select(driver.find_element_by_xpath(birth_year_selection_xpath))
+
+        random_year = random.randrange(1950, 2000)
+        birth_year_selection.select_by_value(str(random_year))
+
+        time.sleep(2)
+
+        # birth_month_random_option = birth_month_selection.find_element(
+        #     By.CSS_SELECTOR, "[data-option-array-index='" + option_index + "']")
+        # option.click()
+
+        button_next_xpath = '/html/body/div[1]/section/main/div/div/div[1]/div/div[6]/button'
+        button_next = driver.find_element_by_xpath(button_next_xpath)
+        button_next.click()
+
+        time.sleep(3)
+
+        sms_code_input_xpath = '/html/body/div[1]/section/main/div/div/' \
+                               'div[1]/div/div/div/form/div[1]/div/label/input'
+        sms_code_input = driver.find_element_by_xpath(sms_code_input_xpath)
+        sms_code_input.send_keys(123456)
+        time.sleep(1)
+        sms_code_input.send_keys(Keys.ENTER)
+
+        time.sleep(2)
+
+        # submit_button_xpath = '/html/body/div[1]/section/main/div/div/' \
+        #                       'div[1]/div/div/div/form/div[2]/button'
+        # submit_button = driver.find_element_by_xpath(submit_button_xpath)
+        # submit_button.click()
+
+        # закрываем окно алертов
+        notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
+        off_notifications = notification_dialog.find_element_by_xpath(
+            './/div/div/div[3]/button[2]')
+        off_notifications.click()
+
+        time.sleep(1)
+
     # метод ставит лайки по hashtag
     def like_photo_by_hashtag(self, hashtag):
 
@@ -247,7 +463,7 @@ class InstagramBot:
         img_default = False
 
         if search_pattern:
-            if search_pattern.startswith('/html') or  search_pattern.startswith('//'):
+            if search_pattern.startswith('/html') or search_pattern.startswith('//'):
                 is_xpath = True
             else:
                 img_default = True
@@ -717,7 +933,7 @@ class InstagramBot:
         for loop in range(1, loops_count + 1):
 
             count = 10
-            driver.get(f"https://www.instagram.com/{USERNAME}/")
+            driver.get(f"https://www.instagram.com/{self.username}/")
             time.sleep(random.randrange(3, 6))
 
             # кликаем/вызываем меню подписок
@@ -734,6 +950,7 @@ class InstagramBot:
 
             for user in following_users:
 
+                # вышли за пределы 10, выходим из цикла, обновляем страницу
                 if not count:
                     break
 
@@ -749,13 +966,15 @@ class InstagramBot:
                 unfollow_button = driver.find_element_by_xpath(
                     "/html/body/div[6]/div/div/div/div[3]/button[1]").click()
 
-                print(f"Итерация #{count} >>> Отписался от пользователя {user_name}")
+                print(f"Итерация до перезагрузки #{count} >>> Отписался от пользователя {user_name}")
                 count -= 1
 
                 # time.sleep(random.randrange(120, 130))
                 time.sleep(random.randrange(2, 4))
 
-        with open("following_users_dict.txt", "w", encoding="utf-8") as file:
+        with open(f'{get_user_directory_path(self.username)}/'
+                  f'{self.username}_following_users_dict.txt', 'w',
+                  encoding='utf-8') as file:
             json.dump(following_users_dict, file)
 
         self.close_driver()
@@ -857,7 +1076,8 @@ class InstagramBot:
                 following_urls.append(url)
 
             # сохраняем всех подписок пользователя в файл
-            with open(f"{username}_following_list.txt", "a") as following_file:
+            with open(f'{get_user_directory_path(self.username)}/'
+                      f'{self.username}_following_list.txt', 'a') as following_file:
                 for link in following_urls:
                     following_file.write(link + "\n")
 
@@ -874,7 +1094,8 @@ class InstagramBot:
                 print(f"Нужно отписаться от {count} пользователей")
 
             # сохраняем всех от кого нужно отписаться в файл
-            with open(f"{username}_unfollow_list.txt", "a") as unfollow_file:
+            with open(f'{get_user_directory_path(self.username)}/'
+                      f'{self.username}_unfollow_list.txt', 'a') as unfollow_file:
                 for user in unfollow_list:
                     unfollow_file.write(user + "\n")
 
@@ -882,7 +1103,8 @@ class InstagramBot:
             time.sleep(2)
 
             # заходим к каждому пользователю на страницу и отписываемся
-            with open(f"{username}_unfollow_list.txt") as unfollow_file:
+            with open(f'{get_user_directory_path(self.username)}/'
+                      f'{self.username}_unfollow_list.txt') as unfollow_file:
                 unfollow_users_list = unfollow_file.readlines()
                 unfollow_users_list = [row.strip() for row in unfollow_users_list]
 
@@ -948,7 +1170,8 @@ def test_massive_2():
 if __name__ == '__main__':
     bot = InstagramBot(USERNAME, PASSWORD)
     # bot.get_account_info()
-    bot.login()
+    # bot.login()
+    bot.reg_account(79926637641, 'sollofkid_junky', 'Sollofkid_junky1')
     # bot.like_photo_by_hashtag('ogbuda')
     # bot.like_post('https://www.instagram.com/p/CMPF3TeDWJ6/')
     # bot.get_all_posts_url('https://www.instagram.com/squalordf/')
@@ -962,6 +1185,7 @@ if __name__ == '__main__':
     # bot.send_direct_message(direct_users_list, 'hi there', 'D:\PyCharm_projects\LB_soft\instagram//violet_sea.jpg')
 
     # bot.unsubscribe_for_all_users()
-    bot.smart_unsubscribe(USERNAME)
+    # bot.smart_unsubscribe(USERNAME)
 
     # test_massive()
+    bot.driver.close()
