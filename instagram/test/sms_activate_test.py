@@ -2,7 +2,6 @@ import time
 
 from smsactivateru import Sms, SmsTypes, SmsService, GetBalance, GetFreeSlots, GetNumber
 
-# TODO вставить api sms-active
 wrapper = Sms('Aee07A928bbbb7f2104b038d1991ee9e')
 
 # getting balance

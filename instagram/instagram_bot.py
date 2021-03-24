@@ -1,8 +1,7 @@
 import json
-import os
-import pathlib
 import pickle
 import random
+import sys
 import time
 
 import requests
@@ -15,76 +14,22 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.proxy import Proxy, ProxyType
 from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-from instagram.config import users_settings_dict
+from instagram.config import users_settings_dict, sms_activate_api
+from instagram.utility.paths import *
 
 from fake_useragent import UserAgent
-from fp.fp import FreeProxy
 
-from smsactivateru import Sms, SmsTypes, SmsService, GetBalance, GetFreeSlots, GetNumber
+from smsactivateru import Sms, SmsTypes, SmsService, GetBalance, GetFreeSlots, \
+    GetNumber, SetStatus, GetStatus
 
 PROJECT_NAME = 'LB_soft'
 second_user_dict = list(users_settings_dict.values())[1]
 USERNAME = second_user_dict['login']
 PASSWORD = second_user_dict['password']
 WINDOW_SIZE = second_user_dict['window_size']
-
-
-# путь к проекту
-def get_project_root_path():
-    current_path = pathlib.Path().cwd()
-    project_path = ''
-
-    for parent_path in current_path.parents:
-        parent_path_parts = parent_path.parts
-        if parent_path_parts[len(parent_path_parts) - 1] == PROJECT_NAME:
-            project_path = parent_path
-            break
-
-    return project_path
-
-
-# путь к модулю проекта с определенным приложением (inst, db, vk)
-def get_module_path():
-    current_path = pathlib.Path().cwd()
-
-    while True:
-        current_path_parts = current_path.parts
-        if current_path_parts[len(current_path_parts) - 2] == PROJECT_NAME:
-            module_path = current_path
-            break
-        else:
-            current_path = current_path.parent
-
-    return module_path
-
-
-def get_user_page_url(username):
-    return f'https://www.instagram.com/{username}/'
-
-
-def get_user_directory_path(username):
-    directory_path = f'{get_module_path()}/users/{username}'
-
-    # создаём папку с именем пользователя для чистоты проекта
-    if not os.path.exists(directory_path):
-        os.mkdir(directory_path)
-
-    return directory_path
-
-
-def get_user_content_dir_path(username):
-    content_dir_path = f'{get_user_directory_path(username)}/content'
-
-    # создаём папку с именем пользователя для чистоты проекта
-    if not os.path.exists(content_dir_path):
-        os.mkdir(content_dir_path)
-
-    return content_dir_path
-
-
-def get_user_posts_file_path(username):
-    return f'{get_user_directory_path(username)}/{username}_posts.txt'
 
 
 class InstagramBot:
@@ -117,17 +62,16 @@ class InstagramBot:
             # proxy_str = '217.28.221.7:30005'
             proxy_str = None
 
-            driver_name = 'chrome'
-
             if driver_name == 'chrome':
-                options = ChromeOptions()
+                chrome_options = ChromeOptions()
                 # скрывает окно браузера
                 # options.add_argument(f'--headless')
                 # изменяет размер окна браузера
-                options.add_argument(f'--window-size={window_size}')
-                # options.add_argument(f'window-size={window_size}')
-
+                chrome_options.add_argument(f'--window-size={window_size}')
+                chrome_options.add_argument("--incognito")
                 # options.add_argument(f'user-agent={user_agent}')
+                # chrome_options.add_experimental_option("mobileEmulation",
+                #                                        {"deviceName": "Galaxy S5"})  # or whatever
 
                 if proxy_str:
                     proxy = Proxy()
@@ -140,10 +84,11 @@ class InstagramBot:
                     proxy.add_to_capabilities(chrome_capabilities)
 
                     driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
-                                              options=options, desired_capabilities=chrome_capabilities)
+                                              options=chrome_options, desired_capabilities=chrome_capabilities)
                 else:
                     driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
-                                              options=options)
+                                              options=chrome_options)
+                    driver.delete_all_cookies()
             else:
                 firefox_profile = webdriver.FirefoxProfile()
                 # firefox_profile.set_preference('general.useragent.override', user_agent)
@@ -159,10 +104,10 @@ class InstagramBot:
 
                 # proxy
                 # firefox_profile.set_preference("network.proxy.type", 1)
-
-                # firefox_profile.set_preference("network.proxy.socks", "127.0.0.1")
-                # firefox_profile.set_preference("network.proxy.socks_port", 9150)
-                # firefox_profile.set_preference("network.proxy.socks_remote_dns", True)
+                # firefox_profile.set_preference("network.proxy.http", proxy)
+                # firefox_profile.set_preference("network.proxy.http_port", port)
+                # firefox_profile.set_preference("network.proxy.ssl", proxy)
+                # firefox_profile.set_preference("network.proxy.ssl_port", port)
 
                 firefox_profile.set_preference("places.history.enabled", False)
                 firefox_profile.set_preference("privacy.clearOnShutdown.offlineApps", True)
@@ -199,6 +144,7 @@ class InstagramBot:
                                            capabilities=firefox_capabilities,
                                            executable_path=f'{get_project_root_path()}\\drivers\\geckodriver.exe',
                                            options=options)
+                driver.delete_all_cookies()
 
         self.username = username
         self.password = password
@@ -208,6 +154,11 @@ class InstagramBot:
     def close_driver(self):
         self.driver.close()
         self.driver.quit()
+
+    def wait_and_close_driver(self):
+        input('Press enter if you want to stop browser right now')
+        self.close_driver()
+        sys.exit()
 
     # метод логина
     def login(self):
@@ -267,7 +218,6 @@ class InstagramBot:
     def get_account_info(self):
 
         driver = self.driver
-        self.login()
 
         user_account_link = driver.find_element_by_link_text(USERNAME)
         user_account_link.click()
@@ -308,7 +258,7 @@ class InstagramBot:
         driver.back()
         time.sleep(10)
 
-    def reg_account(self, phone, username, password, email=None, name=None):
+    def reg_account(self, username, password, email=None, name=None):
         driver = self.driver
         driver.get('https://www.instagram.com')
         time.sleep(random.randrange(2, 4))
@@ -317,114 +267,127 @@ class InstagramBot:
         reg_btn.click()
         time.sleep(random.randrange(2, 4))
 
-        name_or_phone_textbox = driver.find_element_by_name('emailOrPhone')
-        name_or_phone_textbox.clear()
-        name_or_phone_textbox.send_keys(phone)
+        phone_number, activation = get_phone_number()
 
-        time.sleep(2)
+        if phone_number:
 
-        if name:
-            fullname_textbox = driver.find_element_by_name('fullName')
-            fullname_textbox.clear()
-            fullname_textbox.send_keys(name)
+            name_or_phone_textbox = driver.find_element_by_name('emailOrPhone')
+            name_or_phone_textbox.clear()
+            name_or_phone_textbox.send_keys(phone_number)
 
             time.sleep(2)
 
-        username_textbox = driver.find_element_by_name('username')
-        username_textbox.clear()
-        username_textbox.send_keys(username)
+            if name:
+                fullname_textbox = driver.find_element_by_name('fullName')
+                fullname_textbox.clear()
+                fullname_textbox.send_keys(name)
 
-        time.sleep(2)
+                time.sleep(2)
 
-        password_textbox = driver.find_element_by_name('password')
-        password_textbox.clear()
-        password_textbox.send_keys(password)
+            username_textbox = driver.find_element_by_name('username')
+            username_textbox.clear()
+            username_textbox.send_keys(username)
 
-        time.sleep(2)
+            time.sleep(2)
 
-        error_phone = 'Похоже, вы неверно указали номер телефона. Введите полный номер с кодом страны.'
-        error_username = 'Это имя пользователя уже занято. Попробуйте другое.'
+            password_textbox = driver.find_element_by_name('password')
+            password_textbox.clear()
+            password_textbox.send_keys(password)
 
-        # TODO в случае если
-        while True:
-            password_textbox.send_keys(Keys.ENTER)
+            time.sleep(2)
+
+            error_phone = 'Похоже, вы неверно указали номер телефона. Введите полный номер с кодом страны.'
+            error_username = 'Это имя пользователя уже занято. Попробуйте другое.'
+
+            # TODO в случае если недоступны какие то части рег инфы
+            while True:
+                password_textbox.send_keys(Keys.ENTER)
+
+                time.sleep(3)
+
+                try:
+                    error_alert = driver.find_element_by_id('ssfErrorAlert')
+                    error_alert_value = error_alert.text
+
+                    if error_alert_value == error_username:
+                        print('что то сделать если неправильно введен юзернейм')
+                    elif error_alert_value == error_phone:
+                        print('что то сделать если неправильно введен номер телефона')
+
+                except Exception as e:
+                    print(e)
+
+                break
+
+            time.sleep(2)
+
+            birth_month_selection_xpath_first = '/html/body/div[1]/section/main/article/div[2]' \
+                                                '/div[1]/div/div[4]/div/div/span/span[1]/select'
+            birth_month_selection_xpath_second = '/html/body/div[1]/section/main/div/div/' \
+                                                 'div[1]/div/div[4]/div/div/span/span[1]/select'
+
+            if self.exist_element(birth_month_selection_xpath_first):
+                birth_month_selection = Select(driver.find_element_by_xpath(birth_month_selection_xpath_first))
+            elif self.exist_element(birth_month_selection_xpath_second):
+                birth_month_selection = Select(driver.find_element_by_xpath(birth_month_selection_xpath_second))
+            else:
+                birth_month_selection = None
+
+            random_month = random.randrange(11)
+            if birth_month_selection:
+                birth_month_selection.select_by_index(random_month)
+            else:
+                print('month selection not founded')
+
+            time.sleep(2)
+
+            birth_day_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
+                                        'div[1]/div/div[4]/div/div/span/span[2]/select'
+            birth_day_selection = Select(driver.find_element_by_xpath(birth_day_selection_xpath))
+
+            random_day = random.randrange(29)
+            birth_day_selection.select_by_index(random_day)
+
+            time.sleep(2)
+
+            birth_year_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
+                                         'div[1]/div/div[4]/div/div/span/span[3]/select'
+            birth_year_selection = Select(driver.find_element_by_xpath(birth_year_selection_xpath))
+
+            random_year = random.randrange(1975, 2007)
+            birth_year_selection.select_by_value(str(random_year))
+
+            time.sleep(2)
+
+            button_next_xpath = '/html/body/div[1]/section/main/div/div/div[1]/div/div[6]/button'
+            button_next = driver.find_element_by_xpath(button_next_xpath)
+            button_next.click()
 
             time.sleep(3)
 
-            try:
-                error_alert = driver.find_element_by_id('ssfErrorAlert')
-                error_alert_value = error_alert.text
+            if activation:
+                print('activation exist')
+                sms_code = get_sms_code(activation)
+            else:
+                sms_code = 123456
 
-                if error_alert_value == error_username:
-                    print('что то сделать если неправильно введен юзернейм')
-                elif error_alert_value == error_phone:
-                    print('что то сделать если неправильно введен номер телефона')
+            sms_code_input_xpath = '/html/body/div[1]/section/main/div/div/' \
+                                   'div[1]/div/div/div/form/div[1]/div/label/input'
+            sms_code_input = driver.find_element_by_xpath(sms_code_input_xpath)
+            # TODO придумать как вводить код посимвольно
+            sms_code_input.send_keys(sms_code)
+            time.sleep(2)
+            sms_code_input.send_keys(Keys.ENTER)
 
-            except Exception as e:
-                print(e)
+            # сохраняем всех подписчиков пользователя в файл
+            with open(f'{get_module_path()}/accounts.txt', 'a') as accounts_file:
+                accounts_file.write(username + ':' + password +
+                                    ', ' + str(phone_number) + '\n')
 
-            break
-
-        time.sleep(2)
-
-        birth_month_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
-                                      'div[1]/div/div[4]/div/div/span/span[1]/select'
-        birth_month_selection = Select(driver.find_element_by_xpath(birth_month_selection_xpath))
-
-        random_month = random.randrange(11)
-        birth_month_selection.select_by_index(random_month)
-
-        time.sleep(2)
-
-        birth_day_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
-                                    'div[1]/div/div[4]/div/div/span/span[2]/select'
-        birth_day_selection = Select(driver.find_element_by_xpath(birth_day_selection_xpath))
-
-        random_day = random.randrange(29)
-        birth_day_selection.select_by_index(random_day)
-
-        time.sleep(2)
-
-        birth_year_selection_xpath = '/html/body/div[1]/section/main/div/div/' \
-                                     'div[1]/div/div[4]/div/div/span/span[3]/select'
-        birth_year_selection = Select(driver.find_element_by_xpath(birth_year_selection_xpath))
-
-        random_year = random.randrange(1950, 2000)
-        birth_year_selection.select_by_value(str(random_year))
-
-        time.sleep(2)
-
-        # birth_month_random_option = birth_month_selection.find_element(
-        #     By.CSS_SELECTOR, "[data-option-array-index='" + option_index + "']")
-        # option.click()
-
-        button_next_xpath = '/html/body/div[1]/section/main/div/div/div[1]/div/div[6]/button'
-        button_next = driver.find_element_by_xpath(button_next_xpath)
-        button_next.click()
-
-        time.sleep(3)
-
-        sms_code_input_xpath = '/html/body/div[1]/section/main/div/div/' \
-                               'div[1]/div/div/div/form/div[1]/div/label/input'
-        sms_code_input = driver.find_element_by_xpath(sms_code_input_xpath)
-        sms_code_input.send_keys(123456)
-        time.sleep(1)
-        sms_code_input.send_keys(Keys.ENTER)
-
-        time.sleep(2)
-
-        # submit_button_xpath = '/html/body/div[1]/section/main/div/div/' \
-        #                       'div[1]/div/div/div/form/div[2]/button'
-        # submit_button = driver.find_element_by_xpath(submit_button_xpath)
-        # submit_button.click()
-
-        # закрываем окно алертов
-        notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
-        off_notifications = notification_dialog.find_element_by_xpath(
-            './/div/div/div[3]/button[2]')
-        off_notifications.click()
-
-        time.sleep(1)
+            time.sleep(10)
+        else:
+            print('phone number not exist, try again')
+            return None
 
     # метод ставит лайки по hashtag
     def like_photo_by_hashtag(self, hashtag):
@@ -493,20 +456,30 @@ class InstagramBot:
 
         return exist
 
-    # метод ставит лайк на пост по прямой ссылке
-    def like_post(self, insta_post):
-
+    # проверяем, есть ли такой пост в инсте вообще
+    def post_exist(self, post_url):
         driver = self.driver
-        driver.get(insta_post)
+        driver.get(post_url)
         time.sleep(4)
 
-        wrong_user_page = "/html/body/div[1]/section/main/div/h2"
+        wrong_post_url = "/html/body/div[1]/section/main/div/h2"
 
-        if self.exist_element(wrong_user_page):
-            print("Такого поста не существует, проверьте URL")
+        if self.exist_element(wrong_post_url):
+            print('Такого поста не существует, проверьте URL')
             self.close_driver()
         else:
-            print("Пост успешно найден, ставим лайк!")
+            print('Пост успешно найден!')
+            time.sleep(2)
+
+            return True
+
+    # метод ставит лайк на пост по прямой ссылке
+    def like_post(self, post):
+
+        driver = self.driver
+
+        if self.post_exist(post):
+            print('Савим лайк')
             time.sleep(2)
 
             like_button_xpath = '/html/body/div[1]/section/main/div/div[1]/article/' \
@@ -517,8 +490,55 @@ class InstagramBot:
 
             time.sleep(2)
 
-            print(f"Лайк на пост: {insta_post} поставлен!")
+            print(f"Лайк на пост: {post} поставлен!")
             self.close_driver()
+        else:
+            self.wait_and_close_driver()
+
+    # метод оставляет коммент под постом по прямой ссылке
+    def comment_post(self, post, comment):
+
+        driver = self.driver
+
+        if self.post_exist(post):
+            print('Савим коммент')
+            time.sleep(2)
+
+            # заполняем textarea с комментом нужным текстом
+            comment_textarea_xpath = '/html/body/div[1]/section/main/div/div[1]' \
+                                     '/article/div[3]/section[3]/div/form/textarea'
+            comment_textarea = driver.find_element_by_xpath(comment_textarea_xpath)
+            # сначала кликнем, без клика по ходу не включается event, и элемент not iterable
+            comment_textarea.click()
+
+            time.sleep(2)
+            # очистим поле коммента на всяк случай
+            # comment_textarea.clear()
+            try:
+                # нужно опять по xpath найти поле с комментом, после нажатия он меняется
+                WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((
+                        By.XPATH, comment_textarea_xpath))).send_keys(comment)
+
+                # comment_textarea.send_keys(comment)
+            except Exception as e:
+                print(e)
+                # закрывает бразуер по нажатию чего угодно в консоль, чтоб процессы не плодить
+                self.wait_and_close_driver()
+
+            # ищем кнопку опубликовать и жмякаем ее
+            publish_comment_button_xpath = '/html/body/div[1]/section/main/div/div[1]' \
+                                           '/article/div[3]/section[3]/div/form/button[2]'
+
+            publish_comment_button = driver.find_element_by_xpath(publish_comment_button_xpath)
+            publish_comment_button.click()
+
+            time.sleep(2)
+
+            print(f'Коммент "{comment}" остален к посту: {post}')
+        else:
+            # не нашли пост
+            self.wait_and_close_driver()
 
     # метод собирает ссылки на все посты пользователя
     def get_all_posts_url(self, username):
@@ -749,6 +769,7 @@ class InstagramBot:
 
         self.close_driver()
 
+    # вызывать после get_all_followers, он сохраняет фоловверов в файл
     def follow_to_list_of_user_follows(self, username):
 
         with open(f'{get_user_directory_path(username)}/{username}_subs.txt') as text_file:
@@ -777,17 +798,23 @@ class InstagramBot:
                     page_owner = user.split("/")[-2]
 
                     # конпка редактировать профиль
-                    edit_profile_btn = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/a'
+                    edit_profile_btn = '//*[@id="react-root"]/section/main/div/header/section/' \
+                                       'div[2]/div/a'
                     # копнка с галкой о подписке
-                    subscribed_right_now_first = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div[2]/div/span/span[1]/button/div/span'
+                    subscribed_right_now_first = '//*[@id="react-root"]/section/main/div/header/' \
+                                                 'section/div[2]/div/div/div[2]/div/span/span[1]/button/div/span'
                     subscribed_right_now_second = '/html/body/div[1]/section/main/div/header/section/div[1]/div[1]/div/div[2]/button/div/span'
-                    subscribed_right_now_third = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div[1]/div/button'
+                    subscribed_right_now_third = '//*[@id="react-root"]/section/main/div/header/' \
+                                                 'section/div[2]/div/div/div[1]/div/button'
                     # надпись закрытый акк
-                    private_acc_info = '//*[@id="react-root"]/section/main/div/div[2]/article/div[1]/div/h2'
+                    private_acc_info = '//*[@id="react-root"]/section/main/div/div[2]/article/' \
+                                       'div[1]/div/h2'
                     # конпка подписки на закрытый акк
-                    follow_private_acc_btn = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div/button'
+                    follow_private_acc_btn = '//*[@id="react-root"]/section/main/div/header/' \
+                                             'section/div[2]/div/div/div/button'
                     # первый варик подписки на открытый акк
-                    follow_btn_first = '//*[@id="react-root"]/section/main/div/header/section/div[2]/div/div/div/div/span/span[1]/button'
+                    follow_btn_first = '//*[@id="react-root"]/section/main/div/header/section/' \
+                                       'div[2]/div/div/div/div/span/span[1]/button'
                     # второй варик подписки на открытый акк
                     follow_btn_second = '/html/body/div[1]/section/main/div/header/section' \
                                         '/div[1]/div[1]/div/div/div/span/span[1]/button'
@@ -1167,13 +1194,88 @@ def test_massive_2():
         my_bot.smart_unsubscribe("username")
 
 
+def get_phone_number():
+    wrapper = Sms(sms_activate_api)
+
+    try:
+        # try get phone for inst
+        activation = GetNumber(
+            service=SmsService().Instagram
+        ).request(wrapper)
+    except Exception as e:
+        print(e)
+        return None, None
+
+    try:
+        # show activation id and phone for reception sms
+        phone_number = activation.phone_number
+        print('id: {} phone: {}'.format(str(activation.id), str(phone_number)))
+
+        return phone_number, activation
+
+    except Exception as e:
+        print(e)
+        return None, activation
+
+
+def get_sms_code(activation):
+    wrapper = Sms(sms_activate_api)
+
+    # .. send phone number to you service
+    user_action = input('Press enter if you sms was sent or type "cancel": ')
+    if user_action == 'cancel':
+        if user_action == 'cancel':
+            set_as_cancel = SetStatus(
+                id=activation.id,
+                status=SmsTypes.Status.Cancel
+            ).request(wrapper)
+            print(set_as_cancel)
+            exit(1)
+
+    # getting and show current activation status
+    response = GetStatus(id=activation.id).request(wrapper)
+    print(response)
+
+    print('get code')
+
+    # set current activation status as SmsSent (code was sent to phone)
+    set_as_sent = SetStatus(
+        id=activation.id,
+        status=SmsTypes.Status.SmsSent
+    ).request(wrapper)
+    print(set_as_sent)
+
+    # .. wait code
+    while True:
+        time.sleep(1)
+        response = GetStatus(id=activation.id).request(wrapper)
+        if response['code']:
+            sms_code = response['code']
+            print('Your code:{}'.format(sms_code))
+            break
+
+    # set current activation status as End (you got code and it was right)
+    set_as_end = SetStatus(
+        id=activation.id,
+        status=SmsTypes.Status.End
+    ).request(wrapper)
+    print(set_as_end)
+
+    # .. and wait one mode code
+    # (!) if you not set not_end (or set False) – activation ended before return code
+    # activation.wait_code(callback=fuck_yeah, wrapper=wrapper)
+
+    return sms_code
+
+
 if __name__ == '__main__':
     bot = InstagramBot(USERNAME, PASSWORD)
+    bot.login()
     # bot.get_account_info()
-    # bot.login()
-    bot.reg_account(79926637641, 'sollofkid_junky', 'Sollofkid_junky1')
-    # bot.like_photo_by_hashtag('ogbuda')
+    # bot.reg_account('sollofkid_junky', 'Sollofkid_junky1')
+    # bot.like_photo_by_hashtag('zadizmoralen')
     # bot.like_post('https://www.instagram.com/p/CMPF3TeDWJ6/')
+    bot.comment_post('https://www.instagram.com/p/B2KlY4UhK0n/', 'элечка лучшая красотка такая паш')
     # bot.get_all_posts_url('https://www.instagram.com/squalordf/')
     # bot.put_many_likes('squalordf')
 
@@ -1188,4 +1290,4 @@ if __name__ == '__main__':
     # bot.smart_unsubscribe(USERNAME)
 
     # test_massive()
-    bot.driver.close()
+    bot.close_driver()
