@@ -7,25 +7,28 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
+# TODO заменить селеинум на это, если нужна авторизация через прокси
+# from seleniumwire import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.proxy import Proxy, ProxyType
+from selenium.webdriver.common.proxy import ProxyType, Proxy
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from instagram.config import users_settings_dict, sms_activate_api
-from instagram.utility.paths import *
+from instagram.util.paths import *
+from utility.proxy import random_proxy, parse, add_to_working_file
+from utility.urls import get_user_page_url
+from utility.paths import get_project_root_path
 
 from fake_useragent import UserAgent
 
-from smsactivateru import Sms, SmsTypes, SmsService, GetBalance, GetFreeSlots, \
-    GetNumber, SetStatus, GetStatus
+from smsactivateru import Sms, SmsTypes, SmsService, GetNumber, SetStatus, GetStatus
 
-PROJECT_NAME = 'LB_soft'
 second_user_dict = list(users_settings_dict.values())[1]
 USERNAME = second_user_dict['login']
 PASSWORD = second_user_dict['password']
@@ -33,6 +36,13 @@ WINDOW_SIZE = second_user_dict['window_size']
 
 
 class InstagramBot:
+    username = None
+    password = None
+    window_size = None
+    driver = None
+    proxy = None
+    user_agent = None
+
     def __init__(self, username=None, password=None, window_size=None, driver=None):
         if not username:
             username = USERNAME
@@ -48,19 +58,19 @@ class InstagramBot:
             # выбираем браузер из списка
             driver_name = random.choice(driver_name_list)
 
-            # print('get user-agent')
-            # user_agent = UserAgent(cache=False, use_cache_server=False).random
-            # print(user_agent)
+            # user_agent
+            print('get user_agent...')
+            self.user_agent = user_agent = UserAgent(cache=False, use_cache_server=False).random
+            print('user_agent: ', user_agent)
 
-            # proxy = FreeProxy(rand=True).get()
-            # if proxy:
-            #     print(proxy)
-            #     proxy_str = proxy.split('//')[1]
-            # else:
-            #     proxy_str = None
-
-            # proxy_str = '217.28.221.7:30005'
-            proxy_str = None
+            # proxy
+            print('get proxy...')
+            self.proxy = proxy = random_proxy()
+            # self.proxy = proxy = '195.85.171.203:3128'
+            proxy_str = parse(proxy).proxy_signature()
+            # proxy_str = proxy
+            print(proxy_str)
+            # proxy_str = None
 
             if driver_name == 'chrome':
                 chrome_options = ChromeOptions()
@@ -69,29 +79,54 @@ class InstagramBot:
                 # изменяет размер окна браузера
                 chrome_options.add_argument(f'--window-size={window_size}')
                 chrome_options.add_argument("--incognito")
-                # options.add_argument(f'user-agent={user_agent}')
+                # вырубаем палево с инфой что мы webdriver
+                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+                # TODO протестить такой usage прокси
+                # chrome_options.add_argument(f'--proxy-server={proxy_str}')
+                # user-agent
+                chrome_options.add_argument(f'user-agent={user_agent}')
+                # headless mode
+                # chrome_options.headless = True
+
                 # chrome_options.add_experimental_option("mobileEmulation",
                 #                                        {"deviceName": "Galaxy S5"})  # or whatever
 
                 if proxy_str:
-                    proxy = Proxy()
-                    proxy.proxy_type = ProxyType.MANUAL
-                    proxy.http_proxy = proxy_str
-                    proxy.socks_proxy = proxy_str
-                    proxy.ssl_proxy = proxy_str
+                    # НЕ РАБОТАЕТ
+                    # proxy = Proxy()
+                    # proxy.proxy_type = ProxyType.MANUAL
+                    # proxy.http_proxy = proxy_str
+                    # proxy.socks_proxy = proxy_str
+                    # proxy.ssl_proxy = proxy_str
+                    #
+                    # chrome_capabilities = webdriver.DesiredCapabilities.CHROME
+                    # proxy.add_to_capabilities(chrome_capabilities)
 
-                    chrome_capabilities = webdriver.DesiredCapabilities.CHROME
-                    proxy.add_to_capabilities(chrome_capabilities)
+                    # НЕ РАБОТАЕТ
+                    # новый вид записи прокси
+                    # chrome_capabilities = webdriver.DesiredCapabilities.CHROME['proxy'] = {
+                    #     'proxyType': ProxyType.MANUAL,
+                    #     'httpProxy': proxy_str,
+                    #     'ftpProxy': proxy_str,
+                    #     'sslProxy': proxy_str,
+                    #     'socksProxy': proxy_str,
+                    #     # TODO менять версию в зависимости от протокола
+                    #     'socksVersion': 5
+                    # }
+
+                    chrome_options.add_argument(f'--proxy-server={proxy_str}')
 
                     driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
-                                              options=chrome_options, desired_capabilities=chrome_capabilities)
+                                              options=chrome_options)
                 else:
                     driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
                                               options=chrome_options)
-                    driver.delete_all_cookies()
+
+                driver.delete_all_cookies()
             else:
                 firefox_profile = webdriver.FirefoxProfile()
-                # firefox_profile.set_preference('general.useragent.override', user_agent)
+                # меняем user-agent, можно через FirefoxOptions если ЧЕ
+                firefox_profile.set_preference('general.useragent.override', user_agent)
                 firefox_profile.set_preference('dom.file.createInChild', True)
                 firefox_profile.set_preference('font.size.variable.x-western', 14)
                 # firefox_profile.set_preference("permissions.default.desktop-notification", 1)
@@ -109,7 +144,7 @@ class InstagramBot:
                 # firefox_profile.set_preference("network.proxy.ssl", proxy)
                 # firefox_profile.set_preference("network.proxy.ssl_port", port)
 
-                firefox_profile.set_preference("places.history.enabled", False)
+                # firefox_profile.set_preference("places.history.enabled", False)
                 firefox_profile.set_preference("privacy.clearOnShutdown.offlineApps", True)
                 firefox_profile.set_preference("privacy.clearOnShutdown.passwords", True)
                 firefox_profile.set_preference("privacy.clearOnShutdown.siteSettings", True)
@@ -136,14 +171,21 @@ class InstagramBot:
                 else:
                     firefox_capabilities = None
 
-                options = FirefoxOptions()
-                options.add_argument(f'--width={window_size.split(",")[0]}')
-                options.add_argument(f'--height={window_size.split(",")[1]}')
+                firefox_options = FirefoxOptions()
+                # размер окна браузера
+                firefox_options.add_argument(f'--width={window_size.split(",")[0]}')
+                firefox_options.add_argument(f'--height={window_size.split(",")[1]}')
+                # вырубаем палево с инфой что мы webdriver
+                firefox_options.set_preference('dom.webdriver.enabled', False)
+                # headless mode
+                # firefox_options.headless = True
 
+                # инициализируем firefox
                 driver = webdriver.Firefox(firefox_profile=firefox_profile,
                                            capabilities=firefox_capabilities,
                                            executable_path=f'{get_project_root_path()}\\drivers\\geckodriver.exe',
-                                           options=options)
+                                           options=firefox_options, service_log_path='./logs/geckodriver.log')
+
                 driver.delete_all_cookies()
 
         self.username = username
@@ -207,20 +249,27 @@ class InstagramBot:
 
             time.sleep(4)
 
-        # закрываем окно алертов
-        notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
-        off_notifications = notification_dialog.find_element_by_xpath(
-            './/div/div/div[3]/button[2]')
-        off_notifications.click()
+        # проверяем, есть ли окно алертов
+        notification_dialog_search_pattern = '[role="dialog"]'
+        if self.exist_element(notification_dialog_search_pattern, By.CSS_SELECTOR):
+            # закрываем окно алертов
+            notification_dialog = driver.find_element(By.CSS_SELECTOR, '[role="dialog"]')
+            off_notifications = notification_dialog.find_element_by_xpath(
+                './/div/div/div[3]/button[2]')
+            off_notifications.click()
 
-        time.sleep(1)
+            time.sleep(1)
 
     def get_account_info(self):
 
         driver = self.driver
 
-        user_account_link = driver.find_element_by_link_text(USERNAME)
-        user_account_link.click()
+        # старый код через тыки по иконкам
+        # user_profile_xpath = '//div[@data-testid="user-avatar"]'
+        # user_account_link = driver.find_element_by_xpath(user_profile_xpath)
+        # user_account_link = driver.find_element_by_link_text(USERNAME)
+        # user_account_link.click()
+        driver.get(f'https://www.instagram.com/{self.username}/')
 
         time.sleep(3)
 
@@ -403,23 +452,26 @@ class InstagramBot:
         hrefs = driver.find_elements_by_tag_name('a')
         posts_urls = [item.get_attribute('href') for item in hrefs if "/p/" in item.get_attribute('href')]
 
-        for url in posts_urls:
-            try:
-                driver.get(url)
-                time.sleep(3)
+        if posts_urls:
+            for url in posts_urls:
+                try:
+                    driver.get(url)
+                    time.sleep(3)
 
-                like_button = driver.find_element_by_xpath(
-                    '/html/body/div[1]/section/main/div/div[1]/article/'
-                    'div[3]/section[1]/span[1]/button')
-                like_button.click()
+                    like_button = driver.find_element_by_xpath(
+                        '/html/body/div[1]/section/main/div/div[1]/article/'
+                        'div[3]/section[1]/span[1]/button')
+                    like_button.click()
 
-                time.sleep(random.randrange(80, 100))
-            except Exception as ex:
-                print(ex)
-                self.close_driver()
+                    # TODO изменить паузу чтоб не спалиться
+                    time.sleep(random.randrange(80, 100))
+                except Exception as ex:
+                    print(ex)
+        else:
+            print(f'постов по хештегу #{hashtag} нет :(')
 
     # метод проверяет по xpath существует ли элемент на странице
-    def exist_element(self, search_pattern=None):
+    def exist_element(self, search_pattern=None, search_by=None):
         # TODO допилить проверку (я для картинок тут проверяю)
 
         is_xpath = False
@@ -446,13 +498,23 @@ class InstagramBot:
                 print(ex)
                 exist = False
         else:
-            try:
-                elem = bot.driver.find_element_by_class_name('FFVAD')
-                print(elem)
-                print('elem text:', elem.text)
-                exist = True
-            except NoSuchElementException:
-                exist = False
+            if search_by:
+                try:
+                    driver.find_element(search_by, search_pattern)
+                    exist = True
+                except NoSuchElementException:
+                    exist = False
+                except Exception as ex:
+                    print(ex)
+                    exist = False
+            else:
+                try:
+                    elem = bot.driver.find_element_by_class_name('FFVAD')
+                    print(elem)
+                    print('elem text:', elem.text)
+                    exist = True
+                except NoSuchElementException:
+                    exist = False
 
         return exist
 
@@ -1172,28 +1234,6 @@ class InstagramBot:
         self.close_driver()
 
 
-def test_massive():
-    for user, user_data in users_settings_dict.items():
-        username = user_data['login']
-        password = user_data['password']
-
-        my_bot = InstagramBot(username, password)
-        my_bot.login()
-        # my_bot.send_direct_message(direct_users_list, "Hey! How's it going?", "/home/cain/PycharmProjects/instagram_bot/lesson_6/img1.jpg")
-        my_bot.get_all_followers('https://www.instagram.com/squalordf/')
-        time.sleep(random.randrange(4, 8))
-
-
-def test_massive_2():
-    for user, user_data in users_settings_dict.items():
-        username = user_data['login']
-        password = user_data['password']
-
-        my_bot = InstagramBot(username, password)
-        my_bot.login()
-        my_bot.smart_unsubscribe("username")
-
-
 def get_phone_number():
     wrapper = Sms(sms_activate_api)
 
@@ -1268,14 +1308,66 @@ def get_sms_code(activation):
     return sms_code
 
 
+def test_massive():
+    for user, user_data in users_settings_dict.items():
+        username = user_data['login']
+        password = user_data['password']
+
+        my_bot = InstagramBot(username, password)
+        my_bot.login()
+        # my_bot.send_direct_message(direct_users_list, "Hey! How's it going?", "/home/cain/PycharmProjects/instagram_bot/lesson_6/img1.jpg")
+        my_bot.get_all_followers('https://www.instagram.com/squalordf/')
+        time.sleep(random.randrange(4, 8))
+
+
+def test_massive_2():
+    for user, user_data in users_settings_dict.items():
+        username = user_data['login']
+        password = user_data['password']
+
+        my_bot = InstagramBot(username, password)
+        my_bot.login()
+        my_bot.smart_unsubscribe("username")
+
+
+def get_accounts_auth_data(account_count_need):
+    # забираем все акки из файла
+    with open(f'{get_module_path()}/accounts.txt') as accounts_file:
+        account_list = accounts_file.readlines()
+
+    accounts_auth_data_list = []
+    account_count = 0
+
+    while account_list and account_count < account_count_need:
+        random_account = random.choice(account_list)
+
+        auth_data = random_account.split(',')[0].split(':')
+
+        # заглушка для акка без номера телефона, там алерт с указанием номера вылазит (
+        if not auth_data[0] == 'Ashlynmacey71':
+            auth_data_list = [auth_data[0], auth_data[1]]
+
+            accounts_auth_data_list.append(auth_data_list)
+            account_count += 1
+
+        account_list.remove(random_account)
+
+    return accounts_auth_data_list
+
+
 if __name__ == '__main__':
     bot = InstagramBot(USERNAME, PASSWORD)
-    bot.login()
+    # bot.driver.get('https://2ip.ru/')
+    bot.driver.get('http://checkip.org/')
+    print(bot.proxy)
+    time.sleep(5)
+    # time.sleep(5)
+    # bot.login()
     # bot.get_account_info()
     # bot.reg_account('sollofkid_junky', 'Sollofkid_junky1')
     # bot.like_photo_by_hashtag('zadizmoralen')
     # bot.like_post('https://www.instagram.com/p/CMPF3TeDWJ6/')
-    bot.comment_post('https://www.instagram.com/p/B2KlY4UhK0n/', 'элечка лучшая красотка такая паш')
+    # bot.comment_post('https://www.instagram.com/p/B2KlY4UhK0n/', 'элечка лучшая красотка такая паш')
     # bot.get_all_posts_url('https://www.instagram.com/squalordf/')
     # bot.put_many_likes('squalordf')
 

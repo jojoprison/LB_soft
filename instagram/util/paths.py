@@ -1,21 +1,7 @@
 import pathlib
 import os
 
-PROJECT_NAME = 'LB_soft'
-
-
-# путь к проекту
-def get_project_root_path():
-    current_path = pathlib.Path().cwd()
-    project_path = ''
-
-    for parent_path in current_path.parents:
-        parent_path_parts = parent_path.parts
-        if parent_path_parts[len(parent_path_parts) - 1] == PROJECT_NAME:
-            project_path = parent_path
-            break
-
-    return project_path
+import utility.paths as paths
 
 
 # путь к модулю проекта с определенным приложением (inst, db, vk)
@@ -24,17 +10,13 @@ def get_module_path():
 
     while True:
         current_path_parts = current_path.parts
-        if current_path_parts[len(current_path_parts) - 2] == PROJECT_NAME:
+        if current_path_parts[len(current_path_parts) - 2] == paths.PROJECT_NAME:
             module_path = current_path
             break
         else:
             current_path = current_path.parent
 
     return module_path
-
-
-def get_user_page_url(username):
-    return f'https://www.instagram.com/{username}/'
 
 
 def get_user_directory_path(username):
