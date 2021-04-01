@@ -1,26 +1,15 @@
-import pathlib
 import os
 
-import utility.paths as paths
+from utility.paths import get_module_path
 
 
-# путь к модулю проекта с определенным приложением (inst, db, vk)
-def get_module_path():
-    current_path = pathlib.Path().cwd()
-
-    while True:
-        current_path_parts = current_path.parts
-        if current_path_parts[len(current_path_parts) - 2] == paths.PROJECT_NAME:
-            module_path = current_path
-            break
-        else:
-            current_path = current_path.parent
-
-    return module_path
+# путь к модулю с инстой
+def get_instagram_module_path():
+    return get_module_path('instagram')
 
 
 def get_user_directory_path(username):
-    directory_path = f'{get_module_path()}\\users\\{username}'
+    directory_path = f'{get_instagram_module_path()}\\users\\{username}'
 
     # создаём папку с именем пользователя для чистоты проекта
     if not os.path.exists(directory_path):
@@ -41,3 +30,8 @@ def get_user_content_dir_path(username):
 
 def get_user_posts_file_path(username):
     return f'{get_user_directory_path(username)}\\{username}_posts.txt'
+
+
+if __name__ == '__main__':
+    print(get_instagram_module_path())
+    # print(get_user_directory_path('squalordf'))

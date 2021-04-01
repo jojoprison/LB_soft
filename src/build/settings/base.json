@@ -1,0 +1,6 @@
+{
+    "app_name": "LB_Instagram_Bot",
+    "author": "LB_events_ru",
+    "main_module": "src/main/python/inst_bot.py",
+    "version": "0.0.0"
+}

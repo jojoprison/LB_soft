@@ -4,13 +4,11 @@ import time
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 
-import http.cookies
-
-from instagram.instagram_bot import get_project_root_path
+from utility.paths import get_resources_path
 
 
 def login_with_cookies():
-    driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe')
+    driver = webdriver.Chrome(f'{get_resources_path()}/drivers/chromedriver.exe')
 
     driver.get('https://github.com/')
     time.sleep(5)
@@ -25,7 +23,7 @@ def login_with_cookies():
 
 
 def login_parse_cookies():
-    driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe')
+    driver = webdriver.Chrome(f'{get_resources_path()}/drivers/chromedriver.exe')
 
     driver.get('https://github.com/login')
 
@@ -51,7 +49,7 @@ def login_parse_cookies():
 
 
 def login_livelib_parse():
-    driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe')
+    driver = webdriver.Chrome(f'{get_resources_path()}/drivers/chromedriver.exe')
 
     driver.get('https://www.livelib.ru/')
 
@@ -83,7 +81,7 @@ def login_livelib_parse():
 
 
 def login_livelib_w_cookies():
-    driver = webdriver.Chrome(f'{get_project_root_path()}/drivers/chromedriver.exe')
+    driver = webdriver.Chrome(f'{get_resources_path()}/drivers/chromedriver.exe')
 
     driver.get('https://www.livelib.ru/')
     time.sleep(5)

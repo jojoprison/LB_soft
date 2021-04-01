@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 # TODO заменить селеинум на это, если нужна авторизация через прокси
 # from seleniumwire import webdriver
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.common.by import By
@@ -19,11 +19,14 @@ from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
+
 from instagram.config import users_settings_dict, sms_activate_api
 from instagram.util.paths import *
 from utility.proxy import random_proxy, parse, add_to_working_file
 from utility.urls import get_user_page_url
-from utility.paths import get_project_root_path
+from utility.paths import get_project_root_path, get_resources_path
 
 from fake_useragent import UserAgent
 
@@ -59,18 +62,22 @@ class InstagramBot:
             driver_name = random.choice(driver_name_list)
 
             # user_agent
-            print('get user_agent...')
-            self.user_agent = user_agent = UserAgent(cache=False, use_cache_server=False).random
-            print('user_agent: ', user_agent)
+            # print('get user_agent...')
+            # self.user_agent = user_agent = UserAgent(cache=False, use_cache_server=False).random
+            # print('user_agent: ', user_agent)
 
             # proxy
-            print('get proxy...')
-            self.proxy = proxy = random_proxy()
+            # print('get proxy...')
+            # self.proxy = proxy = random_proxy()
+            # proxy_str = parse(proxy).proxy_signature()
+
             # self.proxy = proxy = '195.85.171.203:3128'
-            proxy_str = parse(proxy).proxy_signature()
             # proxy_str = proxy
-            print(proxy_str)
-            # proxy_str = None
+
+            # print(proxy_str)
+            proxy_str = None
+
+            # driver_name = 'firefox'
 
             if driver_name == 'chrome':
                 chrome_options = ChromeOptions()
@@ -84,7 +91,7 @@ class InstagramBot:
                 # TODO протестить такой usage прокси
                 # chrome_options.add_argument(f'--proxy-server={proxy_str}')
                 # user-agent
-                chrome_options.add_argument(f'user-agent={user_agent}')
+                # chrome_options.add_argument(f'user-agent={user_agent}')
                 # headless mode
                 # chrome_options.headless = True
 
@@ -92,41 +99,16 @@ class InstagramBot:
                 #                                        {"deviceName": "Galaxy S5"})  # or whatever
 
                 if proxy_str:
-                    # НЕ РАБОТАЕТ
-                    # proxy = Proxy()
-                    # proxy.proxy_type = ProxyType.MANUAL
-                    # proxy.http_proxy = proxy_str
-                    # proxy.socks_proxy = proxy_str
-                    # proxy.ssl_proxy = proxy_str
-                    #
-                    # chrome_capabilities = webdriver.DesiredCapabilities.CHROME
-                    # proxy.add_to_capabilities(chrome_capabilities)
-
-                    # НЕ РАБОТАЕТ
-                    # новый вид записи прокси
-                    # chrome_capabilities = webdriver.DesiredCapabilities.CHROME['proxy'] = {
-                    #     'proxyType': ProxyType.MANUAL,
-                    #     'httpProxy': proxy_str,
-                    #     'ftpProxy': proxy_str,
-                    #     'sslProxy': proxy_str,
-                    #     'socksProxy': proxy_str,
-                    #     # TODO менять версию в зависимости от протокола
-                    #     'socksVersion': 5
-                    # }
-
                     chrome_options.add_argument(f'--proxy-server={proxy_str}')
 
-                    driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
-                                              options=chrome_options)
-                else:
-                    driver = webdriver.Chrome(executable_path=f'{get_project_root_path()}/drivers/chromedriver.exe',
-                                              options=chrome_options)
+                driver = webdriver.Chrome(executable_path=ChromeDriverManager(cache_valid_range=7).install(),
+                                          options=chrome_options)
 
                 driver.delete_all_cookies()
             else:
                 firefox_profile = webdriver.FirefoxProfile()
                 # меняем user-agent, можно через FirefoxOptions если ЧЕ
-                firefox_profile.set_preference('general.useragent.override', user_agent)
+                # firefox_profile.set_preference('general.useragent.override', user_agent)
                 firefox_profile.set_preference('dom.file.createInChild', True)
                 firefox_profile.set_preference('font.size.variable.x-western', 14)
                 # firefox_profile.set_preference("permissions.default.desktop-notification", 1)
@@ -183,10 +165,11 @@ class InstagramBot:
                 # инициализируем firefox
                 driver = webdriver.Firefox(firefox_profile=firefox_profile,
                                            capabilities=firefox_capabilities,
-                                           executable_path=f'{get_project_root_path()}\\drivers\\geckodriver.exe',
-                                           options=firefox_options, service_log_path='./logs/geckodriver.log')
+                                           executable_path=GeckoDriverManager(cache_valid_range=7).install(),
+                                           options=firefox_options,
+                                           service_log_path=f'{get_instagram_module_path()}/logs/geckodriver.log')
 
-                driver.delete_all_cookies()
+        driver.delete_all_cookies()
 
         self.username = username
         self.password = password
@@ -429,7 +412,7 @@ class InstagramBot:
             sms_code_input.send_keys(Keys.ENTER)
 
             # сохраняем всех подписчиков пользователя в файл
-            with open(f'{get_module_path()}/accounts.txt', 'a') as accounts_file:
+            with open(f'{get_instagram_module_path()}/accounts.txt', 'a') as accounts_file:
                 accounts_file.write(username + ':' + password +
                                     ', ' + str(phone_number) + '\n')
 
@@ -518,6 +501,33 @@ class InstagramBot:
 
         return exist
 
+    def locate_element(self, search_pattern, search_by=None):
+        is_xpath = False
+
+        if search_pattern.startswith('/html') or search_pattern.startswith('//'):
+            is_xpath = True
+
+        driver = self.driver
+
+        if is_xpath:
+            try:
+                located_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, search_pattern))
+                )
+            except TimeoutException as e:
+                print('timeout:\n', e)
+                return None
+            except Exception as e:
+                print(e)
+                return None
+        else:
+            located_element = WebDriverWait(driver, 2).until(
+                EC.presence_of_element_located((search_by, search_pattern))
+            )
+
+        return located_element
+
+
     # проверяем, есть ли такой пост в инсте вообще
     def post_exist(self, post_url):
         driver = self.driver
@@ -541,19 +551,23 @@ class InstagramBot:
         driver = self.driver
 
         if self.post_exist(post):
-            print('Савим лайк')
+            print('Ставим лайк')
             time.sleep(2)
 
             like_button_xpath = '/html/body/div[1]/section/main/div/div[1]/article/' \
                                 'div[3]/section[1]/span[1]/button'
 
             like_button = driver.find_element_by_xpath(like_button_xpath)
-            driver.execute_script("arguments[0].click();", like_button)
+            # проверяем, стоит ли уже лайк на посте
+            is_liked_xpath = like_button.find_element_by_tag_name('svg')
+            is_liked = is_liked_xpath.get_attribute('fill')
+            # #ed4956
+            if is_liked == '#262626':
+                driver.execute_script("arguments[0].click();", like_button)
 
             time.sleep(2)
 
             print(f"Лайк на пост: {post} поставлен!")
-            self.close_driver()
         else:
             self.wait_and_close_driver()
 
@@ -563,7 +577,7 @@ class InstagramBot:
         driver = self.driver
 
         if self.post_exist(post):
-            print('Савим коммент')
+            print('Ставим коммент')
             time.sleep(2)
 
             # заполняем textarea с комментом нужным текстом
@@ -574,15 +588,13 @@ class InstagramBot:
             comment_textarea.click()
 
             time.sleep(2)
-            # очистим поле коммента на всяк случай
-            # comment_textarea.clear()
+
             try:
                 # нужно опять по xpath найти поле с комментом, после нажатия он меняется
                 WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((
                         By.XPATH, comment_textarea_xpath))).send_keys(comment)
 
-                # comment_textarea.send_keys(comment)
             except Exception as e:
                 print(e)
                 # закрывает бразуер по нажатию чего угодно в консоль, чтоб процессы не плодить
@@ -597,10 +609,75 @@ class InstagramBot:
 
             time.sleep(2)
 
-            print(f'Коммент "{comment}" остален к посту: {post}')
+            print(f'Коммент "{comment}" оставлен к посту: {post}')
         else:
             # не нашли пост
             self.wait_and_close_driver()
+
+    # метод оставляет коммент под постом по прямой ссылке
+    def like_comment_post(self, post, comment):
+
+        driver = self.driver
+
+        if self.post_exist(post):
+            print('Ставим лайк')
+            time.sleep(2)
+
+            like_button_xpath = '/html/body/div[1]/section/main/div/div[1]/article/' \
+                                'div[3]/section[1]/span[1]/button'
+
+            like_button = driver.find_element_by_xpath(like_button_xpath)
+            # проверяем, стоит ли уже лайк на посте
+            is_liked_xpath = like_button.find_element_by_tag_name('svg')
+            is_liked = is_liked_xpath.get_attribute('fill')
+            # #ed4956
+            if is_liked == '#262626':
+                driver.execute_script("arguments[0].click();", like_button)
+
+            time.sleep(2)
+
+            print(f"Лайк на пост: {post} поставлен!")
+
+            print('Ставим коммент')
+            time.sleep(2)
+
+            # заполняем textarea с комментом нужным текстом
+            comment_textarea_xpath = '/html/body/div[1]/section/main/div/div[1]' \
+                                     '/article/div[3]/section[3]/div/form/textarea'
+            comment_textarea = driver.find_element_by_xpath(comment_textarea_xpath)
+            # сначала кликнем, без клика по ходу не включается event, и элемент not iterable
+            comment_textarea.click()
+
+            time.sleep(2)
+
+            try:
+                # нужно опять по xpath найти поле с комментом, после нажатия он меняется
+                WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((
+                        By.XPATH, comment_textarea_xpath))).send_keys(comment)
+
+            except Exception as e:
+                print(e)
+                # закрывает бразуер по нажатию чего угодно в консоль, чтоб процессы не плодить
+                self.wait_and_close_driver()
+                return False
+
+            # ищем кнопку опубликовать и жмякаем ее
+            publish_comment_button_xpath = '/html/body/div[1]/section/main/div/div[1]' \
+                                           '/article/div[3]/section[3]/div/form/button[2]'
+
+            publish_comment_button = driver.find_element_by_xpath(publish_comment_button_xpath)
+            publish_comment_button.click()
+
+            time.sleep(2)
+
+            print(f'Коммент "{comment}" оставлен к посту: {post}')
+
+            return True
+        else:
+            # не нашли пост
+            self.wait_and_close_driver()
+            return False
 
     # метод собирает ссылки на все посты пользователя
     def get_all_posts_url(self, username):
@@ -1332,7 +1409,7 @@ def test_massive_2():
 
 def get_accounts_auth_data(account_count_need):
     # забираем все акки из файла
-    with open(f'{get_module_path()}/accounts.txt') as accounts_file:
+    with open(f'{get_instagram_module_path()}/accounts.txt') as accounts_file:
         account_list = accounts_file.readlines()
 
     accounts_auth_data_list = []
@@ -1357,17 +1434,22 @@ def get_accounts_auth_data(account_count_need):
 
 if __name__ == '__main__':
     bot = InstagramBot(USERNAME, PASSWORD)
+    bot.login()
+    # bot.driver.get('https://naruto.fandom.com/ru/wiki/%D0%94%D0%B5%D0%B9%D0%B4%D0%B0%D1%80%D0%B0')
+    # elem = bot.locate_element('/html/body/div[3]/div[7]/header/div[2]/div[1]/a')
+    # elem = bot.locate_element('firstHeading', By.ID)
+    # print(elem)
     # bot.driver.get('https://2ip.ru/')
-    bot.driver.get('http://checkip.org/')
-    print(bot.proxy)
-    time.sleep(5)
+    # bot.driver.get('http://checkip.org/')
+    # print(bot.proxy)
+    # time.sleep(5)
     # time.sleep(5)
     # bot.login()
     # bot.get_account_info()
     # bot.reg_account('sollofkid_junky', 'Sollofkid_junky1')
     # bot.like_photo_by_hashtag('zadizmoralen')
     # bot.like_post('https://www.instagram.com/p/CMPF3TeDWJ6/')
-    # bot.comment_post('https://www.instagram.com/p/B2KlY4UhK0n/', 'элечка лучшая красотка такая паш')
+    # bot.comment_post('https://www.instagram.com/p/CMo6Y73n69f/', 'зайки <3')
     # bot.get_all_posts_url('https://www.instagram.com/squalordf/')
     # bot.put_many_likes('squalordf')
 

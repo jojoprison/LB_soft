@@ -4,4 +4,5 @@
 /venv/
 **/__pycache__/
 *.iml
-/drivers/
+**/drivers/
+/target/

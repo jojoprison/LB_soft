@@ -4,6 +4,10 @@ beautifulsoup4~=4.9.3
 fake_useragent~=0.1.11
 smsactivateru~=1.2.6
 pafy=~=0.5.5
-selenium-wire~=4.2.2
-pyinstaller~=4.2
-PyQT5~=5.15.4
+#selenium-wire~=4.2.2
+#pyinstaller~=4.2
+PyQT5~=5.15.2
+PyQT5-stubs~=5.15.2.0
+PyQT5-tools~=5.15.2.3.0.2
+fbs~=0.9.2
+webdriver-manager~=3.3.0

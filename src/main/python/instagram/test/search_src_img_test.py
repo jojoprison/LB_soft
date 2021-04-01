@@ -5,9 +5,7 @@ from selenium import webdriver
 
 from instagram.config import *
 from instagram.instagram_bot import InstagramBot
-from instagram.instagram_bot import get_project_root_path
-
-from lxml import html
+from instagram.instagram_bot import get_resources_path
 
 
 def find_a(page_source):
@@ -45,7 +43,7 @@ if __name__ == '__main__':
     profile.set_preference("network.proxy.ssl_port", port)
 
     driver = webdriver.Firefox(firefox_profile=profile,
-                               executable_path=f'{get_project_root_path()}/drivers/geckodriver.exe')
+                               executable_path=f'{get_resources_path()}/drivers/geckodriver.exe')
 
     bot = InstagramBot(username=USERNAME_2, password=PASSWORD_2, driver=driver)
 
