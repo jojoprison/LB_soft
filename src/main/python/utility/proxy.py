@@ -1,7 +1,7 @@
 import time
 from pathlib import Path
 from datetime import datetime
-from utility.paths import get_project_root_path
+from utility.paths import get_source_code_path
 
 import requests
 from bs4 import BeautifulSoup
@@ -87,7 +87,7 @@ def free_proxy_list():
 # TODO пробнуть хранить в json
 # запускать периодически чтоб обновлять лист проксей
 def save_to_file():
-    filename = f'{get_project_root_path()}/utility/{FREE_FILENAME}'
+    filename = f'{get_source_code_path()}/utility/{FREE_FILENAME}'
     proxy_file_path = Path(filename)
     # проверяет наличие файла, если его нет - создает
     proxy_file_path.touch(exist_ok=True)
@@ -124,7 +124,7 @@ def save_to_file():
 
 # возвращает список проксей из файла, если есть
 def read_from_file():
-    filename = f'{get_project_root_path()}/utility/{FREE_FILENAME}'
+    filename = f'{get_source_code_path()}/utility/{FREE_FILENAME}'
     proxy_file_path = Path(filename)
 
     # проверяем наличие файла с проксями
@@ -153,7 +153,7 @@ def random_proxy():
 
 
 def add_to_working_file(proxy):
-    working_filename = f'{get_project_root_path()}/utility/{WORKING_FILENAME}'
+    working_filename = f'{get_source_code_path()}/utility/{WORKING_FILENAME}'
     working_proxy_file_path = Path(working_filename)
     # проверяет наличие файла, если его нет - создает
     working_proxy_file_path.touch(exist_ok=True)

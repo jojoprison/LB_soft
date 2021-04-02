@@ -6,3 +6,4 @@
 *.iml
 **/drivers/
 /target/
+**geckodriver.log

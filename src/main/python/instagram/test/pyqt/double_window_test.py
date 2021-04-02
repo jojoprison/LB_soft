@@ -4,8 +4,8 @@ import sys
 
 
 class Second(QMainWindow):
-    def __init__(self):
-        super(Second, self).__init__()
+    def __init__(self, parent=None):
+        super(Second, self).__init__(parent)
 
 
 class First(QMainWindow):
@@ -21,6 +21,7 @@ class First(QMainWindow):
         # self.window = QtWidgets.QMainWindow()
         self.window = Second()
         self.window.show()
+        self.hide()
 
 
 def main():
