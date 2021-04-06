@@ -77,7 +77,7 @@ class InstagramBot:
             # print(proxy_str)
             proxy_str = None
 
-            # driver_name = 'firefox'
+            driver_name = 'chrome'
 
             if driver_name == 'chrome':
                 chrome_options = ChromeOptions()
@@ -1292,7 +1292,7 @@ class InstagramBot:
 
                     # подтверждение отписки
                     unfollow_button_confirm = driver.find_element_by_xpath(
-                        "/html/body/div[4]/div/div/div/div[3]/button[1]")
+                        "/html/body/div[5]/div/div/div/div[3]/button[1]")
                     unfollow_button_confirm.click()
 
                     print(f"Отписались от {user_url}")
