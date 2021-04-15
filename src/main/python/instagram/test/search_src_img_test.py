@@ -4,8 +4,8 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 
 from instagram.config import *
-from instagram.instagram import InstagramBot
-from instagram.instagram import get_resources_path
+from instagram.instagram_bot import InstagramBot
+from instagram.instagram_bot import get_resources_path
 
 
 def find_a(page_source):
