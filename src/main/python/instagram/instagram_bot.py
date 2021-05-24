@@ -38,6 +38,7 @@ WINDOW_SIZE = second_user_dict['window_size']
 class InstagramBot:
     username = None
     password = None
+    reg_date = None
     window_size = None
     driver = None
     proxy = None
@@ -239,26 +240,25 @@ class InstagramBot:
 
             time.sleep(3)
 
+    # TODO записывать данные аккаунта куда-то в файл (допустим json)
     def get_account_info(self):
-
-        driver = self.driver
 
         # старый код через тыки по иконкам
         # user_profile_xpath = '//div[@data-testid="user-avatar"]'
         # user_account_link = driver.find_element_by_xpath(user_profile_xpath)
         # user_account_link = driver.find_element_by_link_text(USERNAME)
         # user_account_link.click()
-        driver.get(f'https://www.instagram.com/{self.username}/')
+        self.driver.get(f'https://www.instagram.com/{self.username}/')
 
         time.sleep(3)
 
-        edit_profile_btn = driver.find_element(
+        edit_profile_btn = self.driver.find_element(
             By.CSS_SELECTOR, '[href="/accounts/edit/"]')
         edit_profile_btn.click()
 
         time.sleep(3)
 
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
 
         name = soup.find('input', id='pepName')
         print(name['value'])
@@ -283,8 +283,32 @@ class InstagramBot:
         gender = div_gender.find('input')
         print(gender['value'])
 
-        driver.back()
-        time.sleep(10)
+        self.driver.back()
+        time.sleep(4)
+
+        settings_button_xpath = '/html/body/div[1]/section/main/div/header/section/div[1]/div[2]/button'
+        settings_button = self.driver.find_element_by_xpath(settings_button_xpath)
+        settings_button.click()
+        time.sleep(2)
+
+        security_button_xpath = '/html/body/div[5]/div/div/div/div/button[5]'
+        security_button = self.driver.find_element_by_xpath(security_button_xpath)
+        security_button.click()
+        time.sleep(3)
+
+        acc_data_button = self.driver.find_element(
+            By.CSS_SELECTOR, '[href="/accounts/access_tool/"]')
+        acc_data_button.click()
+        time.sleep(2)
+
+        reg_date_xpath = '/html/body/div[1]/section/main/div/article/main/div/div[1]/section[1]/section[1]/div'
+        reg_date = self.driver.find_element_by_xpath(reg_date_xpath)
+        # запихиваем дату регистрации аккаунта в поле класса
+        self.reg_date = reg_date.text
+        time.sleep(2)
+
+    # def get_limits(self):
+    #     if self.reg_date
 
     def reg_account(self, username, password, email=None, name=None):
         driver = self.driver

@@ -110,51 +110,6 @@ class InstagramMainWindow(QMainWindow):
         # direct_msg_button = QPushButton('Директ')
         # direct_msg_button.clicked.connect(lambda: self.open_direct_window())
 
-        time_table = QTableWidget(3, 1)
-
-        time_table.setItem(0, 0, QTableWidgetItem("Text in column 1"))
-        time_table.setItem(0, 1, QTableWidgetItem("Text in column 2"))
-        time_table.setItem(0, 2, QTableWidgetItem("Text in column 3"))
-
-        time_table.setStyleSheet("gridline-color: rgb(191, 191, 191)")
-        time_table.setHorizontalHeaderLabels(['FIUC'])
-        time_table.horizontalHeaderItem(0).setToolTip("Column 1 ")
-
-        time_table.setMinimumSize(400, 300)
-
-        time_table.setShowGrid(True)
-
-        font = QFont("Calibri (Body)", 12)
-        time_table.setFont(font)
-
-        vh = time_table.verticalHeader()
-        vh.setVisible(False)
-
-        hh = time_table.horizontalHeader()
-        hh.setStretchLastSection(True)
-
-        hh = time_table.horizontalHeader()
-        hh.setStretchLastSection(True)
-
-        # Do the resize of the columns by content
-        time_table.resizeColumnsToContents()
-
-        nrows = len(tab)
-        for row in xrange(nrows):
-            time_table.setRowHeight(row, 18)
-
-        # enable sorting
-        self.tv.setSortingEnabled(True)
-
-        # time_table.setItem(0, 0, QTableWidgetItem(1))
-        # print(type(time_table.selectRow(0)))
-        # print(time_table.selectRow(0))
-        # row_pos = time_table.rowCount()
-        # print(row_pos)
-        # time_table.setItem(0, 2, QTableWidgetItem('temp'))
-        # time_table.move(0, 0)
-        # time_table.showRow(0)
-
         layout = QVBoxLayout()
         layout.addWidget(like_limit)
         layout.addWidget(comment_limit)
@@ -162,7 +117,6 @@ class InstagramMainWindow(QMainWindow):
         # layout.addWidget(direct_msg_button)
         layout.addWidget(follow_limit)
         layout.addWidget(unfollow_limit)
-        layout.addWidget(time_table)
         layout.addStretch(1)
 
         self.limits_group_box.setLayout(layout)
@@ -171,6 +125,7 @@ class InstagramMainWindow(QMainWindow):
         self.start_group_box = QGroupBox()
 
         start_button = QPushButton('Запустить бота')
+        start_button.clicked.connect(lambda: self.get_inner_field())
 
         layout = QVBoxLayout()
         layout.addWidget(start_button)
@@ -214,3 +169,6 @@ class InstagramMainWindow(QMainWindow):
     def open_strategy_window(self):
         self.strategy_window = InstagramStrategy(self.bot)
         self.strategy_window.show()
+
+    def get_inner_field(self):
+        print(self.like_comment_window.users_comment.text())

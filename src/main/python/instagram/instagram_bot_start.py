@@ -1,5 +1,8 @@
 from instagram.instagram_bot import *
 from multiprocessing import Pool
+import time
+import locale
+import datetime
 
 
 def create():
@@ -39,6 +42,16 @@ def run_multiprocessing():
 
 
 if __name__ == '__main__':
-    bot = create()
-    bot.login()
-    bot.wait_and_close_driver()
+    # bot = create()
+    # bot.login()
+    #
+    # bot.get_account_info()
+
+    locale.setlocale(locale.LC_ALL, '')
+    print(locale.getlocale())
+    tike = datetime.datetime.strptime('11 сентябрь 2020', '%d %B %Y')
+    print(tike)
+
+    '7 сентября 2017 г. 23:08'
+
+    # bot.wait_and_close_driver()

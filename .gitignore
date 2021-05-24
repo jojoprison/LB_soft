@@ -7,3 +7,5 @@
 **/drivers/
 /target/
 **geckodriver.log
+
+zebra
