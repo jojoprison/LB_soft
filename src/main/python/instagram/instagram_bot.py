@@ -39,6 +39,8 @@ class InstagramBot:
     username = None
     password = None
     reg_date = None
+    # данные акка (телефон, имя и тд) в dict
+    account_data = None
     window_size = None
     driver = None
     proxy = None
@@ -178,7 +180,7 @@ class InstagramBot:
         self.driver.quit()
 
     def wait_and_close_driver(self):
-        input('ERROR, Press enter if you want to stop browser right now')
+        input('Press enter if you want to stop browser right now')
         self.close_driver()
         sys.exit()
 
@@ -260,28 +262,33 @@ class InstagramBot:
 
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
 
+        account_data = dict()
+
         name = soup.find('input', id='pepName')
-        print(name['value'])
+        account_data['name'] = name['value']
 
         username = soup.find('input', id='pepUsername')
-        print(username['value'])
+        account_data['username'] = username['value']
 
         website = soup.find('input', id='pepWebsite')
-        print(website['value'])
+        account_data['website'] = website['value']
 
         bio = soup.find('textarea', id='pepBio')
-        print(bio.get_text())
+        account_data['bio'] = bio.get_text()
 
         email = soup.find('input', id='pepEmail')
-        print(email['value'])
+        account_data['email'] = email['value']
 
         phone = soup.find('input', id='pepPhone Number')
-        print(phone['value'])
+        account_data['phone'] = phone['value']
 
         gender_label = soup.find('label', {'for': 'pepGender'})
         div_gender = gender_label.parent.parent
         gender = div_gender.find('input')
-        print(gender['value'])
+        account_data['gender'] = gender['value']
+
+        # записываем всю инфу об аккаунте в поле класса
+        self.account_data = account_data
 
         self.driver.back()
         time.sleep(4)
@@ -307,6 +314,7 @@ class InstagramBot:
         self.reg_date = reg_date.text
         time.sleep(2)
 
+    # TODO доделать прописанные справа лимиты
     # def get_limits(self):
     #     if self.reg_date
 

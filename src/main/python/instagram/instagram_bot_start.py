@@ -41,17 +41,34 @@ def run_multiprocessing():
         pool.starmap(run, accounts_auth_data)
 
 
+def switch_month(month):
+
+    switcher = {
+        'января': 'январь',
+        'февраля': 'февраль',
+        'марта': 'март',
+        'апреля': 'апрель',
+        'мая': 'май',
+        'июня': 'июнь',
+        'июля': 'июль',
+        'августа': 'август',
+        'сентября': 'сентябрь',
+        'октября': 'октябрь',
+        'ноября': 'ноябрь',
+        'декабря': 'декабрь'
+    }
+
+    return switcher.get(month, 'Неправильно введен месяц')
+
+
 if __name__ == '__main__':
     # bot = create()
     # bot.login()
     #
     # bot.get_account_info()
-
-    locale.setlocale(locale.LC_ALL, '')
-    print(locale.getlocale())
-    tike = datetime.datetime.strptime('11 сентябрь 2020', '%d %B %Y')
-    print(tike)
-
-    '7 сентября 2017 г. 23:08'
-
+    #
     # bot.wait_and_close_driver()
+
+
+
+    switch_month

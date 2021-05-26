@@ -7,6 +7,12 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QCheckBox, QComboBox, QD
                              QVBoxLayout, QWidget, QTableWidgetItem)
 from past.builtins import xrange
 
+import time
+import locale
+import datetime
+
+from instagram.util.reg_date import convert_reg_date
+
 from instagram.ui.like_comment import InstagramLikeCommentWindow
 from instagram.ui.follow_unfollow import InstagramFollowUnfollow
 from instagram.ui.direct import InstagramDirect
@@ -18,7 +24,10 @@ class InstagramMainWindow(QMainWindow):
     bot = None
 
     # вызываем конструктор супер класса обычного виндова
-    def __init__(self):
+    def __init__(self, bot):
+
+        self.bot = bot
+
         # вызываем конструктор без родителя чтобы не скрывалась иконка приложения из таскбара
         super(InstagramMainWindow, self).__init__()
 
@@ -27,11 +36,16 @@ class InstagramMainWindow(QMainWindow):
         # self.setGeometry(300, 250, 350, 200)
         self.resize(1000, 600)
 
+        reg_date_info_lbl = QLabel('Дата регистрации:')
+        self.reg_date_lbl = QLabel(self.bot.reg_date)
+
         username_info_label = QLabel('Аккаунт:')
-        username_label = QLabel('instagram_username')
+        username_label = QLabel(self.bot.account_data['username'])
 
         topLayout = QHBoxLayout()
         topLayout.addStretch(1)
+        topLayout.addWidget(reg_date_info_lbl)
+        topLayout.addWidget(self.reg_date_lbl)
         topLayout.addWidget(username_info_label)
         topLayout.addWidget(username_label)
 
@@ -79,9 +93,9 @@ class InstagramMainWindow(QMainWindow):
         strategy_button = QPushButton('Настройка стратегии')
         strategy_button.clicked.connect(lambda: self.open_strategy_window())
 
-        main_limit_label = QtWidgets.QLabel('Общий лимит действий')
+        main_limit_label = QtWidgets.QLabel('Общий лимит действий за неделю')
         main_limit_line = QtWidgets.QLineEdit('600')
-        main_limit_line.setPlaceholderText('Введите общий лимит действий')
+        main_limit_line.setPlaceholderText('Введите общий лимит действий за неделю')
 
         # TODO добавить при дебаге
         # direct_msg_button = QPushButton('Директ')
@@ -99,7 +113,11 @@ class InstagramMainWindow(QMainWindow):
         self.buttons_group_box.setLayout(layout)
 
     def create_limits_info_group_box(self):
-        self.limits_group_box = QGroupBox('Лимиты по заданиям:')
+        self.limits_group_box = QGroupBox('Рекомендуемые лимиты по заданиям:')
+
+        reg_date_converted = convert_reg_date(self.bot.reg_date)
+
+
 
         like_limit = QtWidgets.QLabel('Лимиты лайков')
         comment_limit = QtWidgets.QLabel('Лимиты комментов')
@@ -170,5 +188,6 @@ class InstagramMainWindow(QMainWindow):
         self.strategy_window = InstagramStrategy(self.bot)
         self.strategy_window.show()
 
+    # тестирую поля внутренних окон, чтоб доставать данные
     def get_inner_field(self):
         print(self.like_comment_window.users_comment.text())

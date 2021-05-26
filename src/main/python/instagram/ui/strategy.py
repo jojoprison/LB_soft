@@ -24,18 +24,14 @@ class InstagramStrategy(QMainWindow):
 
         self.setWindowTitle('Настройка стратегии')
 
-        usernames_from_file_button = QtWidgets.QPushButton('Лайки')
-        # добавляем функционал на кнопку
-        usernames_from_file_button.clicked.connect(
-            lambda: self.get_usernames_from_file(self.direct_donors_usernames_text_edit))
-
-        self.central_widget = QtWidgets.QWidget(self)
+        self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
 
         layout = QGridLayout()
-        layout.addWidget(self.like_widget(), 0, 0)
-        layout.addWidget(self.interval_widget(), 0, 1)
-        # layout.addWidget(self.create_right_limits_widget(), 0, 1)
+        layout.addWidget(self.task_widget(), 0, 0)
+        # layout.addWidget(self.interval_widget(), 0, 1)
+        layout.addWidget(self.count_widget(), 0, 1)
+
         # коофицент растяжение колонки (растягивается сначала та, у которой он больше)
         # layout.setRowStretch(1, 1)
         # layout.setRowStretch(1, 1)
@@ -49,30 +45,6 @@ class InstagramStrategy(QMainWindow):
     def bot_reset(self):
         self.bot.close_driver()
         self.bot = None
-
-    def like_widget(self):
-        task_group_box = QGroupBox('Выполнять задания')
-
-        likes_checkbox = QPushButton('Лайки')
-        follow_button = QtWidgets.QPushButton('Подписаться по хештегам')
-        # добавляем функционал на кнопку
-        follow_button.clicked.connect(lambda: self.like_window())
-        likes_checkbox.setChecked(True)
-        comments_checkbox = QCheckBox('Комменты')
-        comments_checkbox.setChecked(True)
-        follows_checkbox = QCheckBox('Подписки')
-        follows_checkbox.setChecked(True)
-
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.addWidget(likes_checkbox)
-        layout.addWidget(comments_checkbox)
-        layout.addWidget(follows_checkbox)
-        layout.addStretch(1)
-
-        task_group_box.setLayout(layout)
-
-        return task_group_box
 
     def like_window(self):
         self.like_window = InstagramLikeStrategy(self.bot)
@@ -98,6 +70,29 @@ class InstagramStrategy(QMainWindow):
         task_group_box.setLayout(layout)
 
         return task_group_box
+
+    def count_widget(self):
+        interval_group_box = QGroupBox('Сколькой действий в неделю выполнять')
+
+        # main_limit_label = QtWidgets.QLabel('Общий лимит действий за день')
+        like_limit = QLineEdit('600')
+        like_limit.setPlaceholderText('Лимит лайков за неделю')
+
+        comment_limit = QLineEdit('600')
+        comment_limit.setPlaceholderText('Лимит комментариев за неделю')
+
+        follow_limit = QLineEdit('600')
+        follow_limit.setPlaceholderText('Лимит подписок за неделю')
+
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(like_limit)
+        main_layout.addWidget(comment_limit)
+        main_layout.addWidget(follow_limit)
+        main_layout.addStretch(1)
+
+        interval_group_box.setLayout(main_layout)
+
+        return interval_group_box
 
     def interval_widget(self):
         interval_group_box = QGroupBox('Паузы между заданиями (сек.)')
