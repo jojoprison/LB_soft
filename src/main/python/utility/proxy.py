@@ -185,6 +185,8 @@ if __name__ == '__main__':
         print('wait 600 sec...')
         time.sleep(600)
 
+    # TODO забрать код из проекта gnoZioz, там тестер проксей из файла
+
     # file = read_from_file()
     # r_proxy = random_proxy()
     # print(r_proxy)
