@@ -103,8 +103,6 @@ class InstagramBot:
 
                 driver = webdriver.Chrome(executable_path=ChromeDriverManager(cache_valid_range=7).install(),
                                           options=chrome_options)
-
-                driver.delete_all_cookies()
             else:
                 firefox_profile = webdriver.FirefoxProfile()
                 # меняем user-agent, можно через FirefoxOptions если ЧЕ
